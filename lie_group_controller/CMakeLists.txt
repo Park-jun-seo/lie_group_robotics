@@ -41,14 +41,14 @@ set(dependencies
 )
 
 add_library(lie_group_controller
-  src/impedance_control_left.cpp
+  src/operational_space_control.cpp
 )
 
 ament_target_dependencies(lie_group_controller ${dependencies})
 target_link_libraries(lie_group_controller)
 
-add_executable(impedance_control_left src/impedance_control_left.cpp)
-ament_target_dependencies(impedance_control_left ${dependencies})
+add_executable(operational_space_control src/operational_space_control.cpp)
+ament_target_dependencies(operational_space_control ${dependencies})
 
 
 ################################################################################
@@ -63,7 +63,7 @@ install(TARGETS lie_group_controller
 
 install(TARGETS
   ${PROJECT_NAME}
-  impedance_control_left
+  operational_space_control
   DESTINATION lib/${PROJECT_NAME}
 )
 
