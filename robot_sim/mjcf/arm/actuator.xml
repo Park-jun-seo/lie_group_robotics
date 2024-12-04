@@ -1,0 +1,27 @@
+<mujoco>
+    <actuator>
+        <!-- <position joint="l_sh_p" name="l_sh_p" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="300"/>
+        <position joint="l_sh_r" name="l_sh_r" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="300"/>
+        <position joint="l_sh_y" name="l_sh_y" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="300"/>
+        <position joint="l_el_p" name="l_el_p" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="300"/>
+        <position joint="l_wr_y" name="l_wr_y" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="300"/>
+        <position joint="l_wr_p" name="l_wr_p" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="300"/>
+        <position joint="l_wr_r" name="l_wr_r" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="300"/> -->
+        <!-- <position joint="r_sh_p" name="r_sh_p" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="2700"/>
+        <position joint="r_sh_r" name="r_sh_r" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="2700"/>
+        <position joint="r_sh_y" name="r_sh_y" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="2700"/>
+        <position joint="r_el_p" name="r_el_p" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="2700"/>
+        <position joint="r_wr_y" name="r_wr_y" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="2700"/>
+        <position joint="r_wr_p" name="r_wr_p" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="2700"/>
+        <position joint="r_wr_r" name="r_wr_r" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="2700"/> -->
+
+        <general name="l_sh_p" ctrlrange="-50 50" joint="l_sh_p"/>
+        <general name="l_sh_r" ctrlrange="-50 50" joint="l_sh_r"/>
+        <general name="l_sh_y" ctrlrange="-50 50" joint="l_sh_y"/>
+        <general name="l_el_p" ctrlrange="-50 50" joint="l_el_p"/>
+        <general name="l_wr_y" ctrlrange="-50 50" joint="l_wr_y"/>
+        <general name="l_wr_p" ctrlrange="-50 50" joint="l_wr_p"/>
+        <general name="l_wr_r" ctrlrange="-50 50" joint="l_wr_r"/>
+
+    </actuator>
+</mujoco>

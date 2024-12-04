@@ -1,0 +1,43 @@
+<mujoco>
+    <body name="left_shoulder_p" pos="0 0.238 0.291" euler="0 0 0">
+        <joint pos="0 0 0" name="l_sh_p" type="hinge" axis="0 1 0" limited="true" range="-3.1415 3.1415" damping="7" />
+        <inertial mass="6.2809923e-01" pos="7.8120036e-03 -2.0319564e-02  2.8569055e-05" fullinertia="0.0010 0.0013 0.00187 -0.000095 0.000000 0.0" />
+        <geom type="sphere" size="0.05 0.05 0.1" contype="0" conaffinity="0" rgba="1 0 0 1"/>
+        <body name="left_shoulder_r" pos="0 0 0" euler="0 0 0">
+            <joint pos="0 0 0" name="l_sh_r" type="hinge" axis="1 0 0" limited="true" range="-3.1415 3.1415" damping="7" />
+            <inertial mass="2.0754202e+00" pos="1.1721786e-04 -2.0673153e-06 -7.6467618e-02" fullinertia="0.0115 0.0117 0.00165 0.000000 -0.000052 -0.0" />
+            <geom type="sphere" size="0.05 0.05 0.1" contype="0" conaffinity="0"  rgba="1 0 0 1"/>
+            <body name="left_shoulder_y" pos="0 0 -0.1325" euler="0 0 0">
+                <joint pos="0 0 0.1325" name="l_sh_y" type="hinge" axis="0 0 1" limited="true" range="-3.1415 3.1415" damping="7" />
+                <inertial mass="8.3595948e-01" pos="1.5427073e-04  1.1853367e-03 -2.5928865e-01" fullinertia="0.0012 0.0013 0.00066 0.000000 -0.000001 0.0" />
+                <geom type="box" size="0.02 0.02 0.1325" contype="0" conaffinity="0"/>
+                <body name="left_el_p" pos="0 0 -0.245" euler="0 0 0">
+                    <geom type="box" size="0.02 0.02 0.1225" contype="0" conaffinity="0"/>
+                    <site name="l_el_p" size="0.05" pos="0 0 0.1225" rgba="1 0 0 1"/>
+                    <inertial mass="9.2390633e-01" pos="-5.4273743e-05  5.2544852e-03 -5.6517244e-02" fullinertia="0.0036 0.0031 0.00101 -0.000003 0.000005 -0.0" />
+                    <joint pos="0 0 0.1225" name="l_el_p" type="hinge" axis="0 1 0" limited="true" range="-3.1415 3.1415" damping="7" />
+                    <body name="left_wr_y" pos="0 0 -0.1225" euler="0 0 0">
+                        <joint pos="0 0 0" name="l_wr_y" type="hinge" axis="0 0 1" limited="true" range="-3.1415 3.1415" damping="7" />
+                        <inertial mass="3.2656578e-01" pos="1.9422183e-03  1.5378307e-03 -1.9197123e-01" fullinertia="0.0006 0.0005 0.00030 0.000002 -0.000002 0.0" />
+                        <geom type="sphere" size="0.05 0.05 0.1" contype="0" conaffinity="0" rgba="1 0 0 1"/>
+                        <body name="left_wr_p" pos="0 0 0" euler="0 0 0">
+                            <joint pos="0 0 0" name="l_wr_p" type="hinge" axis="0 1 0" limited="true" range="-3.1415 3.1415" damping="7" />
+                            <inertial mass="4.1515816e-01" pos="-1.6621476e-02 -1.9601076e-04  1.4473553e-02" fullinertia="0.0002 0.0004 0.00031 0.000012 0.000009 0.0" />
+                            <geom type="sphere" size="0.05 0.05 0.1" contype="0" conaffinity="0" rgba="1 0 0 1"/>
+                            <body name="left_wr_r" pos="0 0 0" euler="0 0 0">
+                                <joint pos="0 0 0" name="l_wr_r" type="hinge" axis="1 0 0" limited="true" range="-3.1415 3.1415" damping="7" />
+                                <inertial mass="1.9200734e-01" pos="-1.0540296e-02  4.6913995e-07 -2.8980827e-02" fullinertia="0.0001 0.0004 0.00031 -0.000000 -0.000018 0.0"/>
+                                <geom type="sphere" size="0.05 0.05 0.1" contype="0" conaffinity="0" rgba="1 0 0 1"/>
+                                <body name="left_end" pos="0 0 -0.0825" euler="0 0 0">
+                                    <geom type="box" size="0.02 0.02 0.0825" mass="0.5" contype="0" conaffinity="0"/>
+                                </body>
+                            </body>
+                        </body>
+                    </body>
+
+                </body>
+
+            </body>
+        </body>
+    </body>
+</mujoco>
