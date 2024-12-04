@@ -10,7 +10,7 @@
 #include "rclcpp/rclcpp.hpp"
 using std::placeholders::_1;
 using JointStates = sensor_msgs::msg::JointState;
-double delta_time = 8;
+double delta_time = 250;
 std::vector<double> body_masses = {0.62810, 2.07542, 0.83596, 0.92391, 0.32657, 0.41516, 0.19201, 0.50000};
 
 class LeftArm : public rclcpp::Node
