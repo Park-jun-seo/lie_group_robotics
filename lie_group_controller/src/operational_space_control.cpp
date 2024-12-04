@@ -652,7 +652,7 @@ private:
                     body_mass_6 * com_link_6 +
                     body_mass_7 * com_link_7 +
                     body_mass_8 * com_link_8) / total_mass;
-        std::cout << std::fixed << std::setprecision(3) << com_total << std::endl;
+        // std::cout << std::fixed << std::setprecision(3) << com_total << std::endl;
         return body_inertial_matrix_all;
     }
     rclcpp::Subscription<JointStates>::SharedPtr joint_subscriber_;
