@@ -33,7 +33,7 @@ public:
         joint_subscriber_ = this->create_subscription<JointStates>(
             "/robot/joint_states",
             qos_profile,
-            std::bind(&LeftArm::Joint_topic_message, this, _1));
+            std::bind(&LeftArm::JointMessageCallback, this, _1));
 
         // 엔드포인트 속도 퍼블리셔
         velocity_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("/end_effector_velocity", qos_profile);
@@ -73,7 +73,7 @@ public:
     }
 
 private:
-    void Joint_topic_message(const JointStates::SharedPtr msg)
+    void JointMessageCallback(const JointStates::SharedPtr msg)
     {
         // 관절 이름 인덱스 초기화
         for (const std::string &joint_name : joint_names)
@@ -95,7 +95,7 @@ private:
             joint_velocities[i] = msg->velocity[index];
         }
     }
-    Eigen::VectorXd vectorToEigen(const std::vector<double> &vec)
+    Eigen::VectorXd VectorToEigen(const std::vector<double> &vec)
     {
         Eigen::VectorXd eigen_vec(vec.size());
         for (size_t i = 0; i < vec.size(); ++i)
@@ -198,9 +198,9 @@ private:
             0, 0, 0, 0, 0, 5;
         gravity_matrix << 0, 0, 9.81, 0, 0, 0;
         // std::vector<double>를 Eigen::VectorXd로 변환
-        Eigen::VectorXd eigen_position = vectorToEigen(position);
-        Eigen::VectorXd eigen_velocity = vectorToEigen(velocity);
-        Eigen::VectorXd eigen_acceleration = vectorToEigen(acceleration);
+        Eigen::VectorXd eigen_position = VectorToEigen(position);
+        Eigen::VectorXd eigen_velocity = VectorToEigen(velocity);
+        Eigen::VectorXd eigen_acceleration = VectorToEigen(acceleration);
         // body_e_force = body_inertial_matrix * (eigen_acceleration - endpoint_acc) +
         //                k_damping * damping_matrix * (eigen_velocity - endpoint_vel) +
         //                k_spring * spring_matrix * (result);
