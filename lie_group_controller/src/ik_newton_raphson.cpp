@@ -10,7 +10,7 @@
 #include "rclcpp/rclcpp.hpp"
 using std::placeholders::_1;
 using JointStates = sensor_msgs::msg::JointState;
-double delta_time = 250;
+double delta_time = 8;
 
 class LEG : public rclcpp::Node
 {
@@ -28,7 +28,10 @@ public:
     LEG()
         : Node("LEG")
     {
-        auto qos_profile = rclcpp::QoS(rclcpp::KeepLast(10));
+        rclcpp::QoS qos_profile(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_default));
+        qos_profile.keep_last(10);
+        qos_profile.reliability(rclcpp::ReliabilityPolicy::Reliable);
+        qos_profile.durability(rclcpp::DurabilityPolicy::Volatile);
         joint_subscriber_ = this->create_subscription<JointStates>(
             "/robot/joint_states",
             qos_profile,
@@ -92,20 +95,26 @@ private:
             joint_positions[i] = msg->position[index];
             joint_velocities[i] = msg->velocity[index];
         }
+        joint_states_received = true;
     }
 
     void Calc()
     {
+        if (!joint_states_received)
+        {
+            // 관절 상태를 수신할 때까지 계산을 건너뜁니다
+            return;
+        }
         // 현재 각도와 속도를 사용하여 엔드 이펙터 위치 계산
         Eigen::VectorXd theta(joint_positions.size());
-        bool calc_done = false;
         for (size_t i = 0; i < joint_positions.size(); ++i)
         {
             theta(i) = joint_positions[i];
         }
 
-        const double tolerance_pos = 1e-3; // 원하는 위치 오차 임계값 설정
-        const double tolerance_rot = 1e-6; // 원하는 회전 오차 임계값 설정
+        const double tolerance = 1e-4; // 원하는 위치 오차 임계값 설정
+
+        // auto start_time = std::chrono::high_resolution_clock::now();
         Eigen::VectorXd current_pose = ForwardKinematics(theta);
         while (true)
         {
@@ -124,17 +133,13 @@ private:
 
             // 목표 위치로의 편차 계산 (현재는 단순히 원하는 위치로 설정)
             Eigen::VectorXd p_des(6);
-            p_des << 0.0, 0.0, -0.5, liegroup::DegToRad(5.0), liegroup::DegToRad(2.0), liegroup::DegToRad(40.0); // 원하는 위치와 회전 (X, Y, Z, R, P, Y)
+            p_des << 0.1, 0.0, -0.5, liegroup::DegToRad(5.0), liegroup::DegToRad(20.0), liegroup::DegToRad(40.0); // 원하는 위치와 회전 (X, Y, Z, R, P, Y)
 
             Eigen::VectorXd delta_p = p_des - current_pose;
 
             // 만약 편차가 임계값 이하로 작아지면 반복을 종료
-            Eigen::Vector3d position_error = delta_p.head(3);
-            Eigen::Vector3d rotation_error = delta_p.tail(3);
-            if (position_error.norm() < tolerance_pos && rotation_error.norm() < tolerance_rot)
+            if (delta_p.norm() < tolerance)
             {
-                calc_done = true;
-                std::cout << "dddddd\n";
                 break;
             }
 
@@ -142,26 +147,11 @@ private:
             Eigen::VectorXd delta_theta = DampedLeastSquaresInverse(J, 1e-3) * delta_p;
             theta += delta_theta;
         }
-        // // 순방향 운동학 계산
-        // Eigen::VectorXd current_pose = ForwardKinematics(theta);
-        // for (double e : current_pose)
-        // {
-        //     std::cout << std::fixed << std::setprecision(3) << e << " ";
-        // }
-        // std::cout << std::endl;
-        // // 자코비안 계산
-        // Eigen::MatrixXd J = ComputeJacobian([this](const Eigen::VectorXd &theta)
-        //                                     { return ForwardKinematics(theta); }, theta);
+        // auto end_time = std::chrono::high_resolution_clock::now();
+        // auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
 
-        // // 목표 위치로의 편차 계산 (현재는 단순히 원하는 위치로 설정)
-        // Eigen::VectorXd p_des(6);
-        // p_des << 0.1, 0.1, -0.5, liegroup::DegToRad(0.0), liegroup::DegToRad(0.0), liegroup::DegToRad(0.0); // 원하는 위치와 회전 (X, Y, Z, R, P, Y)
-
-        // Eigen::VectorXd delta_p = p_des - current_pose;
-
-        // // 뉴턴-랩슨 방법으로 각도 업데이트 (뎀프드 최소자승 역행렬 사용)
-        // Eigen::VectorXd delta_theta = DampedLeastSquaresInverse(J) * delta_p;
-        // theta += delta_theta;
+        // // 걸린 시간 출력
+        // std::cout << "While 문이 반복을 완료하는데 걸린 시간: " << duration << " ms" << std::endl;
 
         // 메시지 퍼블리싱
         auto joint_state_msg = sensor_msgs::msg::JointState();
@@ -171,10 +161,8 @@ private:
             joint_state_msg.name.push_back(joint_name);
             joint_state_msg.position.push_back(theta[joint_name_to_number[joint_name]]);
         }
-        if (calc_done)
-        {
-            joint_publisher_->publish(joint_state_msg);
-        }
+        joint_publisher_->publish(joint_state_msg);
+
         geometry_msgs::msg::Twist position_msg;
         position_msg.linear.x = current_pose(0);
         position_msg.linear.y = current_pose(1);
@@ -345,6 +333,7 @@ private:
     Eigen::VectorXd endpoint_vel;
     Eigen::VectorXd endpoint_acc;
     rclcpp::TimerBase::SharedPtr timer_;
+    bool joint_states_received = false;
 };
 
 int main(int argc, char *argv[])

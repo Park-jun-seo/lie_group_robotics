@@ -10,7 +10,7 @@
 #include "rclcpp/rclcpp.hpp"
 using std::placeholders::_1;
 using JointStates = sensor_msgs::msg::JointState;
-double delta_time = 250;
+double delta_time = 8;
 std::vector<double> body_masses = {0.62810, 2.07542, 0.83596, 0.92391, 0.32657, 0.41516, 0.19201, 0.50000};
 
 class LeftArm : public rclcpp::Node
@@ -29,7 +29,10 @@ public:
     LeftArm()
         : Node("LeftArm"), jacobianCalculator(8, delta_time)
     {
-        auto qos_profile = rclcpp::QoS(rclcpp::KeepLast(10));
+        rclcpp::QoS qos_profile(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_default));
+        qos_profile.keep_last(10);
+        qos_profile.reliability(rclcpp::ReliabilityPolicy::Reliable);
+        qos_profile.durability(rclcpp::DurabilityPolicy::Volatile);
         joint_subscriber_ = this->create_subscription<JointStates>(
             "/robot/joint_states",
             qos_profile,

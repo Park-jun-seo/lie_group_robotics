@@ -2,6 +2,8 @@
 import os
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, LivelinessPolicy
+from rclpy.duration import Duration
 import time
 import mujoco
 import mujoco.viewer
@@ -38,14 +40,17 @@ class MujocoNode(Node):
         super().__init__('mujoco_node')
 
         self.paused = False
-        self.SubscribeToJoints()
-        self.pub_jointstate = self.create_publisher(JointState,"/robot/joint_states", 10)
-        self.clock_pub = self.create_publisher(Clock,"/clock", 10)
-        self.time_factor_pub = self.create_publisher(Float32,"/time_factor", 10)
+        qos_profile = QoSProfile(
+            depth=10,  # keep_last(10) 과 동일
+            reliability=ReliabilityPolicy.RELIABLE,  # 신뢰성 정책을 Reliable로 설정
+            durability=DurabilityPolicy.VOLATILE  # 내구성 정책을 Volatile로 설정
+        )
 
+        self.pub_jointstate = self.create_publisher(JointState,"/robot/joint_states", qos_profile)
+        self.clock_pub = self.create_publisher(Clock,"/clock", qos_profile)
+        self.time_factor_pub = self.create_publisher(Float32,"/time_factor", qos_profile)
+        self.create_subscription(JointState,"/joint_states", self.JointStatesCallback, qos_profile)
 
-    def SubscribeToJoints(self):
-        self.create_subscription(JointState,"/joint_states", self.JointStatesCallback, 10)
 
 
 
