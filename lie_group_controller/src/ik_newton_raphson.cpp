@@ -22,6 +22,7 @@ public:
 
     // 관절의 위치와 속도를 저장하는 배열
     std::vector<double> joint_positions;
+    std::vector<double> cmd_joint_positions;
     std::vector<double> joint_velocities;
 
     LEG()
@@ -52,6 +53,7 @@ public:
             std::bind(&LEG::Calc, this));
 
         joint_positions.resize(joint_names.size());
+        cmd_joint_positions.resize(joint_names.size());
         joint_velocities.resize(joint_names.size());
 
         for (size_t i = 0; i < joint_names.size(); ++i)
@@ -101,13 +103,18 @@ private:
 
         // 순방향 운동학 계산
         Eigen::VectorXd current_pose = ForwardKinematics(theta);
-
+        for (double e : current_pose)
+        {
+            std::cout << std::fixed << std::setprecision(3) << e << " ";
+        }
+        std::cout << std::endl;
         // 자코비안 계산
-        Eigen::MatrixXd J = ComputeJacobian([this](const Eigen::VectorXd &theta) { return ForwardKinematics(theta); }, theta);
+        Eigen::MatrixXd J = ComputeJacobian([this](const Eigen::VectorXd &theta)
+                                            { return ForwardKinematics(theta); }, theta);
 
         // 목표 위치로의 편차 계산 (현재는 단순히 원하는 위치로 설정)
         Eigen::VectorXd p_des(6);
-        p_des << 0.5, 0.5, 0.5, 0, 0, 0; // 원하는 위치와 회전 (X, Y, Z, R, P, Y)
+        p_des << 0.0, 0.0, -0.5, 0, 0, 0; // 원하는 위치와 회전 (X, Y, Z, R, P, Y)
 
         Eigen::VectorXd delta_p = p_des - current_pose;
 
@@ -115,35 +122,131 @@ private:
         Eigen::VectorXd delta_theta = DampedLeastSquaresInverse(J) * delta_p;
         theta += delta_theta;
 
-        // joint_positions 업데이트
-        for (size_t i = 0; i < joint_positions.size(); ++i)
-        {
-            joint_positions[i] = theta(i);
-        }
+        // // joint_positions 업데이트
+        // for (size_t i = 0; i < cmd_joint_positions.size(); ++i)
+        // {
+        //     cmd_joint_positions[i] = theta(i);
+        // }
 
         // 메시지 퍼블리싱
-        auto joint_state_msg = sensor_msgs::msg::JointState();
-        joint_state_msg.header.stamp = this->now();
-        for (const auto &joint_name : joint_names)
-        {
-            joint_state_msg.name.push_back(joint_name);
-            joint_state_msg.position.push_back(theta[joint_name_to_number[joint_name]]);
-        }
-        joint_publisher_->publish(joint_state_msg);
+        // auto joint_state_msg = sensor_msgs::msg::JointState();
+        // joint_state_msg.header.stamp = this->now();
+        // for (const auto &joint_name : joint_names)
+        // {
+        //     joint_state_msg.name.push_back(joint_name);
+        //     joint_state_msg.position.push_back(theta[joint_name_to_number[joint_name]]);
+        // }
+        // joint_publisher_->publish(joint_state_msg);
     }
 
     Eigen::VectorXd ForwardKinematics(const Eigen::VectorXd &theta)
     {
-        // 예: 끝단 이펙터의 위치와 회전을 단순히 계산한다고 가정
-        // 실제로는 Denavit-Hartenberg 매개변수 또는 다른 역운동학 알고리즘을 사용해야 함
-        Eigen::VectorXd pose(6);
-        pose(0) = cos(theta(0)) + sin(theta(1)); // x
-        pose(1) = sin(theta(0)) - cos(theta(1)); // y
-        pose(2) = theta(2);                      // z
-        pose(3) = theta(3);                      // roll
-        pose(4) = theta(4);                      // pitch
-        pose(5) = theta(5);                      // yaw
-        return pose;
+        Eigen::Matrix4d offset_joint_0_T_1;
+        Eigen::Matrix4d offset_joint_1_T_2;
+        Eigen::Matrix4d offset_joint_2_T_3;
+        Eigen::Matrix4d offset_joint_3_T_4;
+        Eigen::Matrix4d offset_joint_4_T_5;
+        Eigen::Matrix4d offset_joint_5_T_6;
+        Eigen::Matrix4d offset_joint_6_T_7;
+
+        offset_joint_0_T_1 << 1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1;
+        // offset_joint_0_T_1 = offset_joint_0_T_1 * liegroup::GetTransformationMatrix(0, 0, 0, liegroup::DegToRad(-5.0), 0, 0);
+
+        offset_joint_1_T_2 << 0, 0, 1, 0,
+                                1, 0, 0, 0,
+                                0, 1, 0, 0,
+                                0, 0, 0, 1;
+
+        offset_joint_2_T_3 << 0, 0, 1, 0,
+                                0, -1, 0, -0.055,
+                                1, 0, 0, 0,
+                                0, 0, 0, 1;
+
+        offset_joint_3_T_4 << 1, 0, 0, 0,
+                                0, 1, 0, 0.355,
+                                0, 0, 1, 0,
+                                0, 0, 0, 1;
+
+        offset_joint_4_T_5 << 0, 0, 1, 0,
+                                0, -1, 0, 0.355,
+                                1, 0, 0, 0,
+                                0, 0, 0, 1;
+
+        offset_joint_5_T_6 << 0, 0, 1, 0,
+                                0, -1, 0, -0.015,
+                                1, 0, 0, 0,
+                                0, 0, 0, 1;
+
+        offset_joint_6_T_7 << 1, 0, 0, 0,
+                                0, 0, -1, 0.034,
+                                0, 1, 0, 0,
+                                0, 0, 0, 1;
+
+        Eigen::Matrix4d T_goal = Eigen::MatrixXd::Identity(4, 4);
+        Eigen::Matrix4d joint_T_1;
+        Eigen::Matrix4d joint_T_2;
+        Eigen::Matrix4d joint_T_3;
+        Eigen::Matrix4d joint_T_4;
+        Eigen::Matrix4d joint_T_5;
+        Eigen::Matrix4d joint_T_6;
+
+        //  "l_hip_p", "l_hip_r", "l_hip_y", "l_knee_p", "l_ankle_p", "l_ankle_r"
+        joint_T_1 << cos(theta(2)), -sin(theta(2)), 0, 0,
+            sin(theta(2)), cos(theta(2)), 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1; // l_hip_y
+
+        joint_T_2 << cos(theta(1)), -sin(theta(1)), 0, 0,
+            sin(theta(1)), cos(theta(1)), 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1; // l_hip_r
+        joint_T_3 << cos(theta(0)), -sin(theta(0)), 0, 0,
+            sin(theta(0)), cos(theta(0)), 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1; // l_hip_p
+        joint_T_4 << cos(theta(3)), -sin(theta(3)), 0, 0,
+            sin(theta(3)), cos(theta(3)), 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1; // l_knee_p
+
+        joint_T_5 << cos(theta(5)), -sin(theta(5)), 0, 0,
+            sin(theta(5)), cos(theta(5)), 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1; // l_ankle_r
+
+        joint_T_6 << cos(theta(4)), -sin(theta(4)), 0, 0,
+            sin(theta(4)), cos(theta(4)), 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1; // l_ankle_p
+
+        Eigen::Matrix4d adjacent_T_1 = offset_joint_0_T_1 * joint_T_1;
+        Eigen::Matrix4d adjacent_T_2 = offset_joint_1_T_2 * joint_T_2;
+        Eigen::Matrix4d adjacent_T_3 = offset_joint_2_T_3 * joint_T_3;
+        Eigen::Matrix4d adjacent_T_4 = offset_joint_3_T_4 * joint_T_4;
+        Eigen::Matrix4d adjacent_T_5 = offset_joint_4_T_5 * joint_T_5;
+        Eigen::Matrix4d adjacent_T_6 = offset_joint_5_T_6 * joint_T_6;
+        Eigen::Matrix4d adjacent_T_7 = offset_joint_6_T_7;
+        T_goal = T_goal * adjacent_T_1 * adjacent_T_2 * adjacent_T_3 * adjacent_T_4 * adjacent_T_5 * adjacent_T_6 * adjacent_T_7;
+        Eigen::VectorXd result(6);
+
+        // Position (x, y, z)
+        result[0] = T_goal(0, 3);
+        result[1] = T_goal(1, 3);
+        result[2] = T_goal(2, 3);
+
+        // Orientation (roll, pitch, yaw) using intrinsic Tait-Bryan angles (XYZ convention)
+        double roll = atan2(T_goal(2, 1), T_goal(2, 2));
+        double pitch = atan2(-T_goal(2, 0), sqrt(T_goal(2, 1) * T_goal(2, 1) + T_goal(2, 2) * T_goal(2, 2)));
+        double yaw = atan2(T_goal(1, 0), T_goal(0, 0));
+
+        result[3] = roll;
+        result[4] = pitch;
+        result[5] = yaw;
+
+        return result;
     }
 
     Eigen::MatrixXd ComputeJacobian(std::function<Eigen::VectorXd(Eigen::VectorXd)> func, const Eigen::VectorXd &theta)

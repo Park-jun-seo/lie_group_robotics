@@ -59,12 +59,12 @@ class MujocoNode(Node):
             while 1:
                 step_start = time.time()
 
-                d.ctrl[joint.index("l_hip_p")] = pos["l_hip_p"]
-                d.ctrl[joint.index("l_hip_r")] = pos["l_hip_r"]
-                d.ctrl[joint.index("l_hip_y")] = pos["l_hip_y"]
-                d.ctrl[joint.index("l_knee_p")] = pos["l_knee_p"]
-                d.ctrl[joint.index("l_ankle_p")] = pos["l_ankle_p"]
-                d.ctrl[joint.index("l_ankle_r")] = pos["l_ankle_r"]
+                # d.ctrl[joint.index("l_hip_p")] = pos["l_hip_p"]
+                # d.ctrl[joint.index("l_hip_r")] = pos["l_hip_r"]
+                # d.ctrl[joint.index("l_hip_y")] = pos["l_hip_y"]
+                # d.ctrl[joint.index("l_knee_p")] = pos["l_knee_p"]
+                # d.ctrl[joint.index("l_ankle_p")] = pos["l_ankle_p"]
+                # d.ctrl[joint.index("l_ankle_r")] = pos["l_ankle_r"]
 
                 if not self.paused:
                     mujoco.mj_step(m, d)

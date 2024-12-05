@@ -1,5 +1,5 @@
 <mujoco>
-    <body name="left_hip_y" pos="0 0 0" euler="5 0 0">
+    <body name="left_hip_y" pos="0 0 0" euler="0 0 0">
         <joint pos="0 0 0" name="l_hip_y" type="hinge" axis="0 0 1" limited="true" range="-180 180" damping="100" />
         <geom type="sphere" size="0.05 0.05 0.1" />
         <body name="left_hip_r" pos="0 0 0" euler="0 0 0">

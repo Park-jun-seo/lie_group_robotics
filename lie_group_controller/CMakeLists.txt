@@ -50,6 +50,9 @@ target_link_libraries(lie_group_controller)
 add_executable(operational_space_control src/operational_space_control.cpp)
 ament_target_dependencies(operational_space_control ${dependencies})
 
+add_executable(ik_newton_raphson src/ik_newton_raphson.cpp)
+ament_target_dependencies(ik_newton_raphson ${dependencies})
+
 
 ################################################################################
 # Install
@@ -64,6 +67,7 @@ install(TARGETS lie_group_controller
 install(TARGETS
   ${PROJECT_NAME}
   operational_space_control
+  ik_newton_raphson
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -90,6 +90,21 @@ namespace liegroup
         return rpy;
     }
 
+    template <typename T>
+    inline T DegToRad(T degree) { return degree * 0.0174533; } // 0.0174533 ≈ PI / 180
+
+    template <typename T>
+    inline T RadToDeg(T radian) { return radian * 57.2958; } // 57.2958 ≈ 180 / PI
+
+    inline double Clamp(double val, double min, double max)
+    {
+        if (val < min)
+            val = min;
+        else if (val > max)
+            val = max;
+        return val;
+    } // val 값을 min과 max 사이로 조정
+
 }
 
 #endif
