@@ -35,6 +35,8 @@ public:
             std::bind(&LEG::JointMessageCallback, this, _1));
 
         // 엔드포인트 속도 퍼블리셔
+        position_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("/end_effector_position", qos_profile);
+
         velocity_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("/end_effector_velocity", qos_profile);
 
         // 엔드포인트 가속도 퍼블리셔
@@ -96,47 +98,91 @@ private:
     {
         // 현재 각도와 속도를 사용하여 엔드 이펙터 위치 계산
         Eigen::VectorXd theta(joint_positions.size());
+        bool calc_done = false;
         for (size_t i = 0; i < joint_positions.size(); ++i)
         {
             theta(i) = joint_positions[i];
         }
 
-        // 순방향 운동학 계산
+        const double tolerance_pos = 1e-3; // 원하는 위치 오차 임계값 설정
+        const double tolerance_rot = 1e-6; // 원하는 회전 오차 임계값 설정
         Eigen::VectorXd current_pose = ForwardKinematics(theta);
-        for (double e : current_pose)
+        while (true)
         {
-            std::cout << std::fixed << std::setprecision(3) << e << " ";
+            // 순방향 운동학 계산
+
+            Eigen::VectorXd current_pose = ForwardKinematics(theta);
+            // for (double e : current_pose)
+            // {
+            //     std::cout << std::fixed << std::setprecision(3) << e << " ";
+            // }
+            // std::cout << std::endl;
+
+            // 자코비안 계산
+            Eigen::MatrixXd J = ComputeJacobian([this](const Eigen::VectorXd &theta)
+                                                { return ForwardKinematics(theta); }, theta);
+
+            // 목표 위치로의 편차 계산 (현재는 단순히 원하는 위치로 설정)
+            Eigen::VectorXd p_des(6);
+            p_des << 0.0, 0.0, -0.5, liegroup::DegToRad(5.0), liegroup::DegToRad(2.0), liegroup::DegToRad(40.0); // 원하는 위치와 회전 (X, Y, Z, R, P, Y)
+
+            Eigen::VectorXd delta_p = p_des - current_pose;
+
+            // 만약 편차가 임계값 이하로 작아지면 반복을 종료
+            Eigen::Vector3d position_error = delta_p.head(3);
+            Eigen::Vector3d rotation_error = delta_p.tail(3);
+            if (position_error.norm() < tolerance_pos && rotation_error.norm() < tolerance_rot)
+            {
+                calc_done = true;
+                std::cout << "dddddd\n";
+                break;
+            }
+
+            // 뉴턴-랩슨 방법으로 각도 업데이트 (뎀프드 최소자승 역행렬 사용)
+            Eigen::VectorXd delta_theta = DampedLeastSquaresInverse(J, 1e-3) * delta_p;
+            theta += delta_theta;
         }
-        std::cout << std::endl;
-        // 자코비안 계산
-        Eigen::MatrixXd J = ComputeJacobian([this](const Eigen::VectorXd &theta)
-                                            { return ForwardKinematics(theta); }, theta);
-
-        // 목표 위치로의 편차 계산 (현재는 단순히 원하는 위치로 설정)
-        Eigen::VectorXd p_des(6);
-        p_des << 0.0, 0.0, -0.5, 0, 0, 0; // 원하는 위치와 회전 (X, Y, Z, R, P, Y)
-
-        Eigen::VectorXd delta_p = p_des - current_pose;
-
-        // 뉴턴-랩슨 방법으로 각도 업데이트 (뎀프드 최소자승 역행렬 사용)
-        Eigen::VectorXd delta_theta = DampedLeastSquaresInverse(J) * delta_p;
-        theta += delta_theta;
-
-        // // joint_positions 업데이트
-        // for (size_t i = 0; i < cmd_joint_positions.size(); ++i)
+        // // 순방향 운동학 계산
+        // Eigen::VectorXd current_pose = ForwardKinematics(theta);
+        // for (double e : current_pose)
         // {
-        //     cmd_joint_positions[i] = theta(i);
+        //     std::cout << std::fixed << std::setprecision(3) << e << " ";
         // }
+        // std::cout << std::endl;
+        // // 자코비안 계산
+        // Eigen::MatrixXd J = ComputeJacobian([this](const Eigen::VectorXd &theta)
+        //                                     { return ForwardKinematics(theta); }, theta);
+
+        // // 목표 위치로의 편차 계산 (현재는 단순히 원하는 위치로 설정)
+        // Eigen::VectorXd p_des(6);
+        // p_des << 0.1, 0.1, -0.5, liegroup::DegToRad(0.0), liegroup::DegToRad(0.0), liegroup::DegToRad(0.0); // 원하는 위치와 회전 (X, Y, Z, R, P, Y)
+
+        // Eigen::VectorXd delta_p = p_des - current_pose;
+
+        // // 뉴턴-랩슨 방법으로 각도 업데이트 (뎀프드 최소자승 역행렬 사용)
+        // Eigen::VectorXd delta_theta = DampedLeastSquaresInverse(J) * delta_p;
+        // theta += delta_theta;
 
         // 메시지 퍼블리싱
-        // auto joint_state_msg = sensor_msgs::msg::JointState();
-        // joint_state_msg.header.stamp = this->now();
-        // for (const auto &joint_name : joint_names)
-        // {
-        //     joint_state_msg.name.push_back(joint_name);
-        //     joint_state_msg.position.push_back(theta[joint_name_to_number[joint_name]]);
-        // }
-        // joint_publisher_->publish(joint_state_msg);
+        auto joint_state_msg = sensor_msgs::msg::JointState();
+        joint_state_msg.header.stamp = this->now();
+        for (const auto &joint_name : joint_names)
+        {
+            joint_state_msg.name.push_back(joint_name);
+            joint_state_msg.position.push_back(theta[joint_name_to_number[joint_name]]);
+        }
+        if (calc_done)
+        {
+            joint_publisher_->publish(joint_state_msg);
+        }
+        geometry_msgs::msg::Twist position_msg;
+        position_msg.linear.x = current_pose(0);
+        position_msg.linear.y = current_pose(1);
+        position_msg.linear.z = current_pose(2);
+        position_msg.angular.x = current_pose(3);
+        position_msg.angular.y = current_pose(4);
+        position_msg.angular.z = current_pose(5);
+        position_publisher_->publish(position_msg);
     }
 
     Eigen::VectorXd ForwardKinematics(const Eigen::VectorXd &theta)
@@ -153,37 +199,37 @@ private:
             0, 1, 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1;
-        // offset_joint_0_T_1 = offset_joint_0_T_1 * liegroup::GetTransformationMatrix(0, 0, 0, liegroup::DegToRad(-5.0), 0, 0);
+        offset_joint_0_T_1 = offset_joint_0_T_1 * liegroup::GetTransformationMatrix(0, 0, 0, liegroup::DegToRad(5.0), 0, 0);
 
         offset_joint_1_T_2 << 0, 0, 1, 0,
-                                1, 0, 0, 0,
-                                0, 1, 0, 0,
-                                0, 0, 0, 1;
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 0, 1;
 
         offset_joint_2_T_3 << 0, 0, 1, 0,
-                                0, -1, 0, -0.055,
-                                1, 0, 0, 0,
-                                0, 0, 0, 1;
+            0, -1, 0, -0.055,
+            1, 0, 0, 0,
+            0, 0, 0, 1;
 
         offset_joint_3_T_4 << 1, 0, 0, 0,
-                                0, 1, 0, 0.355,
-                                0, 0, 1, 0,
-                                0, 0, 0, 1;
+            0, 1, 0, 0.355,
+            0, 0, 1, 0,
+            0, 0, 0, 1;
 
         offset_joint_4_T_5 << 0, 0, 1, 0,
-                                0, -1, 0, 0.355,
-                                1, 0, 0, 0,
-                                0, 0, 0, 1;
+            0, -1, 0, 0.355,
+            1, 0, 0, 0,
+            0, 0, 0, 1;
 
         offset_joint_5_T_6 << 0, 0, 1, 0,
-                                0, -1, 0, -0.015,
-                                1, 0, 0, 0,
-                                0, 0, 0, 1;
+            0, -1, 0, -0.015,
+            1, 0, 0, 0,
+            0, 0, 0, 1;
 
         offset_joint_6_T_7 << 1, 0, 0, 0,
-                                0, 0, -1, 0.034,
-                                0, 1, 0, 0,
-                                0, 0, 0, 1;
+            0, 0, -1, 0.034,
+            0, 1, 0, 0,
+            0, 0, 0, 1;
 
         Eigen::Matrix4d T_goal = Eigen::MatrixXd::Identity(4, 4);
         Eigen::Matrix4d joint_T_1;
@@ -291,8 +337,7 @@ private:
     rclcpp::Subscription<JointStates>::SharedPtr joint_subscriber_;
     rclcpp::Publisher<JointStates>::SharedPtr joint_publisher_;
 
-    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr velocity_publisher_;
-    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr accelerate_publisher_;
+    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr velocity_publisher_, position_publisher_, accelerate_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::Wrench>::SharedPtr force_publisher_;
 
     std::vector<Eigen::Matrix4d> H;
