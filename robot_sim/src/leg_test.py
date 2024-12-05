@@ -14,23 +14,21 @@ from geometry_msgs.msg import Pose2D
 from diagnostic_msgs.msg import KeyValue
 
 pos = {
-    "l_sh_p": 0,
-    "l_sh_r": 0,
-    "l_sh_y": 0,
-    "l_el_p": 0,
-    "l_wr_y": 0,
-    "l_wr_p": 0,
-    "l_wr_r": 0,
+    "l_hip_p": 0,
+    "l_hip_r": 0,
+    "l_hip_y": 0,
+    "l_knee_p": 0,
+    "l_ankle_p": 0,
+    "l_ankle_r": 0,
 }
 
 joint = [
-    "l_sh_p",
-    "l_sh_r",
-    "l_sh_y",
-    "l_el_p",
-    "l_wr_y",
-    "l_wr_p",
-    "l_wr_r",
+    "l_hip_p",
+    "l_hip_r",
+    "l_hip_y",
+    "l_knee_p",
+    "l_ankle_p",
+    "l_ankle_r",
 ]
 
 class MujocoNode(Node):
@@ -38,6 +36,7 @@ class MujocoNode(Node):
         super().__init__('mujoco_node')
 
         self.paused = False
+
         self.SubscribeToJoints()
         self.pub_jointstate = self.create_publisher(JointState,"/robot/joint_states", 10)
         self.clock_pub = self.create_publisher(Clock,"/clock", 10)
@@ -51,7 +50,7 @@ class MujocoNode(Node):
 
     def mujoco(self):
         current_script_path = os.path.abspath(__file__)
-        root = os.path.dirname(os.path.dirname(os.path.dirname(current_script_path))) + "/share/robot_sim/mjcf/arm/scene.xml"
+        root = os.path.dirname(os.path.dirname(os.path.dirname(current_script_path))) + "/share/robot_sim/mjcf/leg/scene.xml"
         m = mujoco.MjModel.from_xml_path(root)
         d = mujoco.MjData(m)
         with mujoco.viewer.launch_passive(m, d, key_callback=self.key_callback) as viewer:
@@ -60,13 +59,12 @@ class MujocoNode(Node):
             while 1:
                 step_start = time.time()
 
-                d.ctrl[joint.index("l_sh_p")] = pos["l_sh_p"]
-                d.ctrl[joint.index("l_sh_r")] = pos["l_sh_r"]
-                d.ctrl[joint.index("l_sh_y")] = pos["l_sh_y"]
-                d.ctrl[joint.index("l_el_p")] = pos["l_el_p"]
-                d.ctrl[joint.index("l_wr_y")] = pos["l_wr_y"]
-                d.ctrl[joint.index("l_wr_p")] = pos["l_wr_p"]
-                d.ctrl[joint.index("l_wr_r")] = pos["l_wr_r"]
+                d.ctrl[joint.index("l_hip_p")] = pos["l_hip_p"]
+                d.ctrl[joint.index("l_hip_r")] = pos["l_hip_r"]
+                d.ctrl[joint.index("l_hip_y")] = pos["l_hip_y"]
+                d.ctrl[joint.index("l_knee_p")] = pos["l_knee_p"]
+                d.ctrl[joint.index("l_ankle_p")] = pos["l_ankle_p"]
+                d.ctrl[joint.index("l_ankle_r")] = pos["l_ankle_r"]
 
                 if not self.paused:
                     mujoco.mj_step(m, d)

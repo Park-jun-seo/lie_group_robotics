@@ -22,6 +22,7 @@ find_package(geometry_msgs REQUIRED)
 # Install Python executable
 install(PROGRAMS
   src/arm_test.py
+  src/leg_test.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

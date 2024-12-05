@@ -1,0 +1,22 @@
+<mujoco>
+    <contact>
+        <exclude body1="left_hip_p" body2="left_hip_r" />
+        <exclude body1="left_hip_p" body2="left_hip_y" />
+        <exclude body1="left_hip_r" body2="left_hip_y" />
+
+        <exclude body1="left_leg1" body2="left_hip_r" />
+        <exclude body1="left_leg1" body2="left_hip_p" />
+        <exclude body1="left_leg1" body2="left_hip_y" />
+
+        
+        <exclude body1="left_leg2" body2="left_ankle_r" />
+        <exclude body1="left_leg2" body2="left_ankle_p" />
+        <exclude body1="left_leg2" body2="left_leg3" />
+
+        <exclude body1="left_leg3" body2="left_ankle_r" />
+        <exclude body1="left_leg3" body2="left_ankle_p" />
+
+
+
+    </contact>
+</mujoco>
