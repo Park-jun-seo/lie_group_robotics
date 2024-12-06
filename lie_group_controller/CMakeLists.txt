@@ -19,8 +19,7 @@ find_package(lie_toolbox REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(sensor_msgs REQUIRED)
-
-
+find_package(osqp_vendor REQUIRED)
 
 ################################################################################
 # Build
@@ -40,34 +39,47 @@ set(dependencies
   geometry_msgs
 )
 
-add_library(lie_group_controller
+# Libraries
+add_library(lie_group_controller_lib
   src/operational_space_control.cpp
+  src/ik_newton_raphson.cpp
+  src/ik_newton_raphson_qp.cpp
+)
+ament_target_dependencies(lie_group_controller_lib ${dependencies})
+target_link_libraries(lie_group_controller_lib
+  ${Eigen3_LIBRARIES}
+  osqp::osqp
 )
 
-ament_target_dependencies(lie_group_controller ${dependencies})
-target_link_libraries(lie_group_controller)
+# Executables
+add_executable(operational_space_control_node src/operational_space_control.cpp)
+ament_target_dependencies(operational_space_control_node ${dependencies})
+target_link_libraries(operational_space_control_node lie_group_controller_lib)
 
-add_executable(operational_space_control src/operational_space_control.cpp)
-ament_target_dependencies(operational_space_control ${dependencies})
+add_executable(ik_newton_raphson_node src/ik_newton_raphson.cpp)
+ament_target_dependencies(ik_newton_raphson_node ${dependencies})
+target_link_libraries(ik_newton_raphson_node lie_group_controller_lib)
 
-add_executable(ik_newton_raphson src/ik_newton_raphson.cpp)
-ament_target_dependencies(ik_newton_raphson ${dependencies})
-
+add_executable(ik_newton_raphson_qp_node src/ik_newton_raphson_qp.cpp)
+ament_target_dependencies(ik_newton_raphson_qp_node ${dependencies})
+target_link_libraries(ik_newton_raphson_qp_node lie_group_controller_lib)
 
 ################################################################################
 # Install
 ################################################################################
-install(TARGETS lie_group_controller
-  EXPORT export_lie_group_controller
+# Install libraries
+install(TARGETS lie_group_controller_lib
+  EXPORT export_lie_group_controller_lib
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
   INCLUDES DESTINATION include
 )
 
+# Install executables
 install(TARGETS
-  ${PROJECT_NAME}
-  operational_space_control
-  ik_newton_raphson
+  operational_space_control_node
+  ik_newton_raphson_node
+  ik_newton_raphson_qp_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
