@@ -105,6 +105,11 @@ private:
             // 관절 상태를 수신할 때까지 계산을 건너뜁니다
             return;
         }
+        static bool loop = false;
+        if (loop)
+        {
+            return;
+        }
         // 현재 각도와 속도를 사용하여 엔드 이펙터 위치 계산
         Eigen::VectorXd theta(joint_positions.size());
         for (size_t i = 0; i < joint_positions.size(); ++i)
@@ -114,8 +119,20 @@ private:
 
         const double tolerance = 1e-4; // 원하는 위치 오차 임계값 설정
 
-        // auto start_time = std::chrono::high_resolution_clock::now();
+        auto start_time = std::chrono::high_resolution_clock::now();
         Eigen::VectorXd current_pose = ForwardKinematics(theta);
+        // 목표 위치로의 편차 계산 (현재는 단순히 원하는 위치로 설정)
+        Eigen::VectorXd p_des(6);
+        p_des << 0.1, 0.0, -0.5, liegroup::DegToRad(5.0), liegroup::DegToRad(20.0), liegroup::DegToRad(40.0); // 원하는 위치와 회전 (X, Y, Z, R, P, Y)
+        int iteration = 0;
+
+        Eigen::VectorXd delta_p = p_des - ForwardKinematics(theta);
+
+        // 반복 종료 조건
+        if (delta_p.norm() < tolerance)
+        {
+            return;
+        }
         while (true)
         {
             // 순방향 운동학 계산
@@ -126,15 +143,6 @@ private:
             //     std::cout << std::fixed << std::setprecision(3) << e << " ";
             // }
             // std::cout << std::endl;
-
-            // 자코비안 계산
-            Eigen::MatrixXd J = ComputeJacobian([this](const Eigen::VectorXd &theta)
-                                                { return ForwardKinematics(theta); }, theta);
-
-            // 목표 위치로의 편차 계산 (현재는 단순히 원하는 위치로 설정)
-            Eigen::VectorXd p_des(6);
-            p_des << 0.1, 0.0, -0.5, liegroup::DegToRad(5.0), liegroup::DegToRad(20.0), liegroup::DegToRad(40.0); // 원하는 위치와 회전 (X, Y, Z, R, P, Y)
-
             Eigen::VectorXd delta_p = p_des - current_pose;
 
             // 만약 편차가 임계값 이하로 작아지면 반복을 종료
@@ -142,17 +150,21 @@ private:
             {
                 break;
             }
-
+            // 자코비안 계산
+            Eigen::MatrixXd J = ComputeJacobian([this](const Eigen::VectorXd &theta)
+                                                { return ForwardKinematics(theta); }, theta);
             // 뉴턴-랩슨 방법으로 각도 업데이트 (뎀프드 최소자승 역행렬 사용)
             Eigen::VectorXd delta_theta = DampedLeastSquaresInverse(J, 1e-3) * delta_p;
             theta += delta_theta;
+            iteration++;
         }
-        // auto end_time = std::chrono::high_resolution_clock::now();
-        // auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count(); // 나노초 단위
+        double duration_ms = duration_ns / 1e6;                                                                 // 나노초를 밀리초로 변환
 
-        // // 걸린 시간 출력
-        // std::cout << "While 문이 반복을 완료하는데 걸린 시간: " << duration << " ms" << std::endl;
-
+        // 걸린 시간 출력
+        std::cout << "While 문이 반복을 완료하는데 걸린 시간: " << duration_ms << " ms | 횟수: " << iteration << std::endl;
+        loop = true;
         // 메시지 퍼블리싱
         auto joint_state_msg = sensor_msgs::msg::JointState();
         joint_state_msg.header.stamp = this->now();

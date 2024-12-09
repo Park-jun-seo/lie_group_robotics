@@ -107,6 +107,11 @@ private:
             // 관절 상태를 수신할 때까지 계산을 건너뜁니다
             return;
         }
+        static bool loop = false;
+        if (loop)
+        {
+            return;
+        }
         // 현재 각도와 속도를 사용하여 엔드 이펙터 위치 계산
         Eigen::VectorXd theta(joint_positions.size());
         for (size_t i = 0; i < joint_positions.size(); ++i)
@@ -124,6 +129,14 @@ private:
         const double tolerance = 1e-4;  // 원하는 위치 오차 임계값 설정
         const int max_iterations = 100; // 반복 최대 횟수
         int iteration = 0;
+
+        Eigen::VectorXd delta_p = p_des - ForwardKinematics(theta);
+
+        // 반복 종료 조건
+        if (delta_p.norm() < tolerance)
+        {
+            return;
+        }
 
         while (true)
         {
@@ -155,8 +168,8 @@ private:
         double duration_ms = duration_ns / 1e6;                                                                 // 나노초를 밀리초로 변환
 
         // 걸린 시간 출력
-        std::cout << "While 문이 반복을 완료하는데 걸린 시간: " << duration_ms << " ms" << std::endl;
-
+        std::cout << "While 문이 반복을 완료하는데 걸린 시간: " << duration_ms << " ms | 횟수: " << iteration << std::endl;
+        loop = true;
         // 메시지 퍼블리싱
         auto joint_state_msg = sensor_msgs::msg::JointState();
         joint_state_msg.header.stamp = this->now();
