@@ -116,135 +116,46 @@ private:
 
         // const double tolerance = 1e-4; // 원하는 위치 오차 임계값 설정
 
-        // auto start_time = std::chrono::high_resolution_clock::now();
+        auto start_time = std::chrono::high_resolution_clock::now();
         // 목표 위치 설정
         Eigen::VectorXd p_des(6);
         p_des << 0.1, 0.0, -0.5, liegroup::DegToRad(5.0), liegroup::DegToRad(20.0), liegroup::DegToRad(40.0); // 원하는 위치와 회전 (X, Y, Z, R, P, Y)
 
-        // 자코비안 계산
-        Eigen::MatrixXd J = ComputeJacobian([this](const Eigen::VectorXd &theta)
-                                            { return ForwardKinematics(theta); }, theta);
+        const double tolerance = 1e-4;  // 원하는 위치 오차 임계값 설정
+        const int max_iterations = 100; // 반복 최대 횟수
+        int iteration = 0;
 
-        // QP 설정을 위해 목표 함수와 제약 조건을 정의합니다
-        int n = theta.size();
-
-        // H, f 정의 (목표 함수 0.5 * x'Hx + f'x)
-        Eigen::MatrixXd H = J.transpose() * J;
-        // 대칭 행렬 보장
-        H = (H + H.transpose()) / 2.0;
-
-        // H 행렬의 대칭성 확인
-        if (!H.isApprox(H.transpose(), 1e-6))
+        while (true)
         {
-            std::cerr << "H 행렬이 대칭이 아닙니다." << std::endl;
-        }
+            // 순방향 운동학 계산
+            Eigen::VectorXd current_pose = ForwardKinematics(theta);
+            Eigen::VectorXd delta_p = p_des - current_pose;
 
-        // H 행렬의 최소 고유값 확인
-        Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigenSolver(H);
-        if (eigenSolver.eigenvalues().minCoeff() < -1e-6)
-        {
-            std::cerr << "H 행렬이 양의 반정치 행렬이 아닙니다. 최소 고유값: " << eigenSolver.eigenvalues().minCoeff() << std::endl;
-        }
-
-        Eigen::VectorXd f = -J.transpose() * (p_des - ForwardKinematics(theta));
-
-        // OSQP 설정
-        OSQPWorkspace *work;
-        OSQPSettings *settings = (OSQPSettings *)c_malloc(sizeof(OSQPSettings));
-        OSQPData *data = (OSQPData *)c_malloc(sizeof(OSQPData));
-
-        // 행렬 크기 설정
-        data->n = n;
-        data->m = 0; // 이 예제에서는 제약 조건이 없습니다 (필요시 추가 가능)
-
-        // H의 상삼각 요소만을 추출하여 OSQP에 전달 (CSC 형식)
-        Eigen::SparseMatrix<double> H_sparse = H.triangularView<Eigen::Upper>().sparseView();
-
-        std::vector<c_float> P_data;
-        std::vector<c_int> P_indices;
-        std::vector<c_int> P_indptr;
-        P_indptr.push_back(0); // 시작 인덱스
-
-        for (int k = 0; k < H_sparse.outerSize(); ++k)
-        {
-            for (Eigen::SparseMatrix<double>::InnerIterator it(H_sparse, k); it; ++it)
+            // 반복 종료 조건
+            if (delta_p.norm() < tolerance || iteration >= max_iterations)
             {
-                P_data.push_back(static_cast<c_float>(it.value()));
-                P_indices.push_back(it.row());
-            }
-            P_indptr.push_back(P_data.size());
-        }
-
-        // P 행렬의 상삼각 형태 검증
-        bool is_upper_triangular = true;
-        for (int j = 0; j < n; ++j)
-        {
-            for (int i = 0; i < j; ++i)
-            {
-                if (H(i, j) != 0)
-                {
-                    // 상삼각 요소이므로 (i <= j)인 경우만 허용
-                    continue;
-                }
-                else if (H(i, j) != 0) // 추가적인 검증 필요 시
-                {
-                    is_upper_triangular = false;
-                    break;
-                }
-            }
-            if (!is_upper_triangular)
                 break;
-        }
-        if (!is_upper_triangular)
-        {
-            std::cerr << "P 행렬이 상삼각 행렬이 아닙니다." << std::endl;
-        }
+            }
 
-        // CSC 행렬 설정
-        data->P = csc_matrix(n, n, P_data.size(), P_data.data(), P_indices.data(), P_indptr.data());
+            // 자코비안 계산 (현재 각도 기준)
+            Eigen::MatrixXd J = ComputeJacobian([this](const Eigen::VectorXd &theta)
+                                                { return ForwardKinematics(theta); }, theta);
 
-        // f 벡터 설정
-        data->q = f.data();
+            // 최적화 문제 해결 (각속도 계산)
+            Eigen::VectorXd theta_dot;
+            SolveOptimization(J, delta_p, theta_dot);
 
-        // OSQP 기본 설정
-        osqp_set_default_settings(settings);
-        settings->alpha = 1.0; // 이완 인자 설정
+            theta += theta_dot;
 
-        // OSQP 문제 초기화 및 해결
-        c_int exitflag = osqp_setup(&work, data, settings);
-        if (exitflag != 0)
-        {
-            std::cerr << "OSQP setup failed with exit flag: " << exitflag << std::endl;
-            // OSQP 메모리 해제
-            if (settings)
-                c_free(settings);
-            if (data)
-                c_free(data);
-            return; // 함수 종료 혹은 오류 처리 루틴 실행
+            iteration++;
         }
 
-        // 결과 추출 (성공한 경우에만)
-        Eigen::VectorXd delta_theta(n);
-        for (int i = 0; i < n; ++i)
-        {
-            delta_theta(i) = work->solution->x[i];
-        }
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count(); // 나노초 단위
+        double duration_ms = duration_ns / 1e6;                                                                 // 나노초를 밀리초로 변환
 
-        // 각도 업데이트
-        theta += delta_theta;
-
-        // OSQP 메모리 해제
-        osqp_cleanup(work);
-        if (settings)
-            c_free(settings);
-        if (data)
-            c_free(data);
-
-        // auto end_time = std::chrono::high_resolution_clock::now();
-        // auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-
-        // // 걸린 시간 출력
-        // std::cout << "While 문이 반복을 완료하는데 걸린 시간: " << duration << " ms" << std::endl;
+        // 걸린 시간 출력
+        std::cout << "While 문이 반복을 완료하는데 걸린 시간: " << duration_ms << " ms" << std::endl;
 
         // 메시지 퍼블리싱
         auto joint_state_msg = sensor_msgs::msg::JointState();
@@ -265,6 +176,94 @@ private:
         position_msg.angular.y = current_pose(4);
         position_msg.angular.z = current_pose(5);
         position_publisher_->publish(position_msg);
+    }
+    void SolveOptimization(const Eigen::MatrixXd &J, const Eigen::VectorXd &p_dot, Eigen::VectorXd &theta_dot, double epsilon = 1e-4)
+    {
+        int n = J.cols(); // 변수의 수 (관절 각속도)
+        int m = J.rows(); // 출력 벡터의 수 (엔드 이펙터 속도)
+
+        // P 행렬 (상삼각)
+        // Eigen::MatrixXd P_dense = J.transpose() * J + epsilon * Eigen::MatrixXd::Identity(n, n);
+        Eigen::MatrixXd P_dense = J.transpose() * J + epsilon * Eigen::MatrixXd::Identity(n, n);
+        for (int i = 0; i < P_dense.rows(); ++i)
+        {
+            for (int j = 0; j < i; ++j)
+            {
+                P_dense(i, j) = 0.0; // 대각선 아래 0으로 설정
+            }
+        }
+        Eigen::SparseMatrix<double> P_sparse = P_dense.sparseView();
+
+        // 확인용 출력
+        // std::cout << "P_sparse:" << std::endl;
+        // std::cout << Eigen::MatrixXd(P_sparse) << std::endl;
+
+        // q 벡터 (목표 속도)
+        Eigen::VectorXd q = -J.transpose() * p_dot;
+
+        // A 행렬 (제약 조건 없음, 예제로 단위 행렬 사용)
+        Eigen::SparseMatrix<double> A_sparse(n, n);
+        A_sparse.setIdentity();
+
+        // 하한 및 상한 (단위 제약 조건)
+        std::vector<c_float> l(n, -1.0); // 최소값
+        std::vector<c_float> u(n, 1.0);  // 최대값
+
+        // CSC 포맷으로 변환
+        std::vector<c_float> P_data(P_sparse.valuePtr(), P_sparse.valuePtr() + P_sparse.nonZeros());
+        std::vector<c_int> P_indices(P_sparse.innerIndexPtr(), P_sparse.innerIndexPtr() + P_sparse.nonZeros());
+        std::vector<c_int> P_pointers(P_sparse.outerIndexPtr(), P_sparse.outerIndexPtr() + P_sparse.outerSize() + 1);
+
+        std::vector<c_float> q_data(q.data(), q.data() + q.size());
+
+        std::vector<c_float> A_data(A_sparse.valuePtr(), A_sparse.valuePtr() + A_sparse.nonZeros());
+        std::vector<c_int> A_indices(A_sparse.innerIndexPtr(), A_sparse.innerIndexPtr() + A_sparse.nonZeros());
+        std::vector<c_int> A_pointers(A_sparse.outerIndexPtr(), A_sparse.outerIndexPtr() + A_sparse.outerSize() + 1);
+
+        // OSQPData 초기화
+        OSQPData data;
+        data.n = n; // 변수 개수
+        data.m = m; // 제약 조건 개수
+        data.P = csc_matrix(n, n, P_sparse.nonZeros(), P_data.data(), P_indices.data(), P_pointers.data());
+        data.q = q_data.data();
+        data.A = csc_matrix(m, n, A_sparse.nonZeros(), A_data.data(), A_indices.data(), A_pointers.data());
+        data.l = l.data();
+        data.u = u.data();
+
+        // OSQPSettings 초기화
+        OSQPSettings settings;
+        osqp_set_default_settings(&settings);
+        settings.verbose = false; // 출력 비활성화
+
+        // OSQPWorkspace 설정
+        OSQPWorkspace *work = nullptr;
+        c_int status = osqp_setup(&work, &data, &settings);
+
+        if (status != 0)
+        {
+            std::cerr << "OSQP setup failed with error code: " << status << std::endl;
+            return;
+        }
+
+        // 문제 풀이
+        osqp_solve(work);
+
+        if (work->info->status_val != OSQP_SOLVED)
+        {
+            std::cerr << "OSQP failed to solve the problem with status: " << work->info->status_val << std::endl;
+            osqp_cleanup(work);
+            return;
+        }
+
+        // 결과 저장
+        theta_dot.resize(n);
+        for (int i = 0; i < n; ++i)
+        {
+            theta_dot(i) = work->solution->x[i];
+        }
+
+        // 메모리 해제
+        osqp_cleanup(work);
     }
 
     Eigen::VectorXd ForwardKinematics(const Eigen::VectorXd &theta)
