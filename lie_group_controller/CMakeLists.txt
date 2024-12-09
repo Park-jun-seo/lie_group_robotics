@@ -44,6 +44,7 @@ add_library(lie_group_controller_lib
   src/operational_space_control.cpp
   src/ik_newton_raphson.cpp
   src/ik_newton_raphson_qp.cpp
+  src/ik_newton_raphson_qp_constraints.cpp
 )
 ament_target_dependencies(lie_group_controller_lib ${dependencies})
 target_link_libraries(lie_group_controller_lib
@@ -64,6 +65,10 @@ add_executable(ik_newton_raphson_qp_node src/ik_newton_raphson_qp.cpp)
 ament_target_dependencies(ik_newton_raphson_qp_node ${dependencies})
 target_link_libraries(ik_newton_raphson_qp_node lie_group_controller_lib)
 
+add_executable(ik_newton_raphson_qp_constraints src/ik_newton_raphson_qp_constraints.cpp)
+ament_target_dependencies(ik_newton_raphson_qp_constraints ${dependencies})
+target_link_libraries(ik_newton_raphson_qp_constraints lie_group_controller_lib)
+
 ################################################################################
 # Install
 ################################################################################
@@ -80,6 +85,7 @@ install(TARGETS
   operational_space_control_node
   ik_newton_raphson_node
   ik_newton_raphson_qp_node
+  ik_newton_raphson_qp_constraints
   DESTINATION lib/${PROJECT_NAME}
 )
 
