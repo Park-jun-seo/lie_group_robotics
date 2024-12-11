@@ -51,20 +51,10 @@ set(dependencies
   ament_index_cpp
 )
 
-# if(${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
-#   add_library(lie_toolbox
-#     src/qos_profiles.cpp
-#   )
-# else()
-#   add_library(lie_toolbox
-#     src/lie_algebra.cpp
-#     src/incremental_jacobian.cpp
-#   )
-# endif()
-
 add_library(lie_toolbox
 src/lie_algebra.cpp
 src/incremental_jacobian.cpp
+src/polynomial_interpolation.cpp
 )
 
 ament_target_dependencies(lie_toolbox ${dependencies})
