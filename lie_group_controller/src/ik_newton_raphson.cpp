@@ -71,6 +71,9 @@ public:
         endpoint_pos = Eigen::MatrixXd::Identity(4, 4);
         endpoint_vel = Eigen::MatrixXd::Zero(6, 1);
         endpoint_acc = Eigen::MatrixXd::Zero(6, 1);
+
+        // 시작 시간 기록
+        start_time_ = this->now();
     }
 
 private:
@@ -105,11 +108,6 @@ private:
             // 관절 상태를 수신할 때까지 계산을 건너뜁니다
             return;
         }
-        static bool loop = false;
-        if (loop)
-        {
-            return;
-        }
         // 현재 각도와 속도를 사용하여 엔드 이펙터 위치 계산
         Eigen::VectorXd theta(joint_positions.size());
         for (size_t i = 0; i < joint_positions.size(); ++i)
@@ -119,11 +117,20 @@ private:
 
         const double tolerance = 1e-4; // 원하는 위치 오차 임계값 설정
 
-        auto start_time = std::chrono::high_resolution_clock::now();
         Eigen::VectorXd current_pose = ForwardKinematics(theta);
         // 목표 위치로의 편차 계산 (현재는 단순히 원하는 위치로 설정)
+        // 시간에 따른 사인파 생성
+        double elapsed_time = (this->now() - start_time_).seconds();
+        double amplitude = 0.1; // 사인파의 진폭 (미터 단위)
+        double frequency = 0.5; // 사인파의 주파수 (Hz)
+        double omega = 2 * M_PI * frequency;
+        double base_z = -0.5; // 기본 z 위치
+        double z = amplitude * sin(omega * elapsed_time) + base_z;
+
+        // 원하는 위치와 회전을 설정 (z축만 사인파로 변경)
         Eigen::VectorXd p_des(6);
-        p_des << 0.1, 0.0, -0.5, liegroup::DegToRad(5.0), liegroup::DegToRad(20.0), liegroup::DegToRad(40.0); // 원하는 위치와 회전 (X, Y, Z, R, P, Y)
+        p_des << 0.1, 0.0, z, liegroup::DegToRad(5.0), liegroup::DegToRad(20.0), liegroup::DegToRad(40.0);
+
         int iteration = 0;
 
         Eigen::VectorXd delta_p = p_des - ForwardKinematics(theta);
@@ -133,6 +140,7 @@ private:
         {
             return;
         }
+        auto start_time_calc = std::chrono::high_resolution_clock::now();
         while (true)
         {
             // 순방향 운동학 계산
@@ -158,13 +166,13 @@ private:
             theta += delta_theta;
             iteration++;
         }
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count(); // 나노초 단위
+        auto end_time_calc = std::chrono::high_resolution_clock::now();
+        auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time_calc - start_time_calc).count(); // 나노초 단위
         double duration_ms = duration_ns / 1e6;                                                                 // 나노초를 밀리초로 변환
 
         // 걸린 시간 출력
-        std::cout << "While 문이 반복을 완료하는데 걸린 시간: " << duration_ms << " ms | 횟수: " << iteration << std::endl;
-        loop = true;
+        RCLCPP_INFO(this->get_logger(), "While 문이 반복을 완료하는데 걸린 시간: %.3f ms | 횟수: %d", duration_ms, iteration);
+
         // 메시지 퍼블리싱
         auto joint_state_msg = sensor_msgs::msg::JointState();
         joint_state_msg.header.stamp = this->now();
@@ -175,14 +183,14 @@ private:
         }
         joint_publisher_->publish(joint_state_msg);
 
-        geometry_msgs::msg::Twist position_msg;
-        position_msg.linear.x = current_pose(0);
-        position_msg.linear.y = current_pose(1);
-        position_msg.linear.z = current_pose(2);
-        position_msg.angular.x = current_pose(3);
-        position_msg.angular.y = current_pose(4);
-        position_msg.angular.z = current_pose(5);
-        position_publisher_->publish(position_msg);
+        // geometry_msgs::msg::Twist position_msg;
+        // position_msg.linear.x = current_pose(0);
+        // position_msg.linear.y = current_pose(1);
+        // position_msg.linear.z = current_pose(2);
+        // position_msg.angular.x = current_pose(3);
+        // position_msg.angular.y = current_pose(4);
+        // position_msg.angular.z = current_pose(5);
+        // position_publisher_->publish(position_msg);
     }
 
     Eigen::VectorXd ForwardKinematics(const Eigen::VectorXd &theta)
@@ -346,6 +354,7 @@ private:
     Eigen::VectorXd endpoint_acc;
     rclcpp::TimerBase::SharedPtr timer_;
     bool joint_states_received = false;
+    rclcpp::Time start_time_;
 };
 
 int main(int argc, char *argv[])

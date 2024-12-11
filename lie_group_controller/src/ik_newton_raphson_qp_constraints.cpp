@@ -73,6 +73,9 @@ public:
         endpoint_pos = Eigen::MatrixXd::Identity(4, 4);
         endpoint_vel = Eigen::MatrixXd::Zero(6, 1);
         endpoint_acc = Eigen::MatrixXd::Zero(6, 1);
+
+        // 시작 시간 기록
+        start_time_ = this->now();
     }
 
 private:
@@ -108,6 +111,13 @@ private:
             return;
         }
 
+        // 최적화 문제 해결 (각속도 계산)
+        // 각도 제한 설정
+        Eigen::VectorXd theta_min(6); // 최소 각도 제한
+        Eigen::VectorXd theta_max(6); // 최대 각도 제한
+        theta_min << -3.14, -3.14, -3.14, -3.14, -3.14, -3.14;
+        theta_max << 3.14, 3.14, 3.14, 2.0, 3.14, 3.14;
+
         // 현재 각도와 속도를 사용하여 엔드 이펙터 위치 계산
         Eigen::VectorXd theta(joint_positions.size());
         for (size_t i = 0; i < joint_positions.size(); ++i)
@@ -115,10 +125,18 @@ private:
             theta(i) = joint_positions[i];
         }
 
-        // 목표 위치 설정
-        Eigen::VectorXd p_des(6);
-        p_des << 0.1, 0.0, -0.5, liegroup::DegToRad(5.0), liegroup::DegToRad(20.0), liegroup::DegToRad(40.0); // 원하는 위치와 회전 (X, Y, Z, R, P, Y)
+        double elapsed_time = (this->now() - start_time_).seconds();
+        double amplitude = 0.1; // 사인파의 진폭 (미터 단위)
+        double frequency = 0.5; // 사인파의 주파수 (Hz)
+        double omega = 2 * M_PI * frequency;
+        double base_z = -0.5; // 기본 z 위치
+        double z = amplitude * sin(omega * elapsed_time) + base_z;
 
+        // 원하는 위치와 회전을 설정 (z축만 사인파로 변경)
+        Eigen::VectorXd p_des(6);
+        p_des << 0.1, 0.0, z, liegroup::DegToRad(5.0), liegroup::DegToRad(20.0), liegroup::DegToRad(40.0);
+
+        auto start_time_calc = std::chrono::high_resolution_clock::now();
         Eigen::VectorXd delta_p = p_des - ForwardKinematics(theta);
 
         // 자코비안 계산 (현재 각도 기준)
@@ -126,15 +144,14 @@ private:
                                             { return ForwardKinematics(theta); }, theta);
 
         // 최적화 문제 해결 (각속도 계산)
-        // 각도 제한 설정
-        Eigen::VectorXd theta_min(6); // 최소 각도 제한
-        Eigen::VectorXd theta_max(6); // 최대 각도 제한
-        theta_min << -1.57, -1.57, -1.57, 0.0, -1.57, -1.57;
-        theta_max << 1.57, 1.57, 1.57, 2.0, 1.57, 1.57;
-
-        // 최적화 문제 해결 (각속도 계산)
         Eigen::VectorXd theta_dot;
         SolveOptimization(J, delta_p, theta_dot, theta, theta_min, theta_max);
+        auto end_time_calc = std::chrono::high_resolution_clock::now();
+        auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time_calc - start_time_calc).count(); // 나노초 단위
+        double duration_ms = duration_ns / 1e6;                                                                           // 나노초를 밀리초로 변환
+
+        // 걸린 시간 출력
+        RCLCPP_INFO(this->get_logger(), "While 문이 반복을 완료하는데 걸린 시간: %.3f ms", duration_ms);
 
         theta += theta_dot;
 
@@ -148,15 +165,15 @@ private:
         }
         joint_publisher_->publish(joint_state_msg);
 
-        Eigen::VectorXd current_pose = ForwardKinematics(theta);
-        geometry_msgs::msg::Twist position_msg;
-        position_msg.linear.x = current_pose(0);
-        position_msg.linear.y = current_pose(1);
-        position_msg.linear.z = current_pose(2);
-        position_msg.angular.x = current_pose(3);
-        position_msg.angular.y = current_pose(4);
-        position_msg.angular.z = current_pose(5);
-        position_publisher_->publish(position_msg);
+        // Eigen::VectorXd current_pose = ForwardKinematics(theta);
+        // geometry_msgs::msg::Twist position_msg;
+        // position_msg.linear.x = current_pose(0);
+        // position_msg.linear.y = current_pose(1);
+        // position_msg.linear.z = current_pose(2);
+        // position_msg.angular.x = current_pose(3);
+        // position_msg.angular.y = current_pose(4);
+        // position_msg.angular.z = current_pose(5);
+        // position_publisher_->publish(position_msg);
     }
 
     void SolveOptimization(const Eigen::MatrixXd &J, const Eigen::VectorXd &p_dot, Eigen::VectorXd &theta_dot,
@@ -191,8 +208,8 @@ private:
 
         for (int i = 0; i < n; ++i)
         {
-            l[i] = liegroup::Clamp(theta_min[i] - theta_current[i],-0.1,0.1); // 각도 제한 하한
-            u[i] = liegroup::Clamp(theta_max[i] - theta_current[i],-0.1,0.1); // 각도 제한 상한
+            l[i] = liegroup::Clamp(theta_min[i] - theta_current[i], -1.0, 1.0); // 각도 제한 하한
+            u[i] = liegroup::Clamp(theta_max[i] - theta_current[i], -1.0, 1.0); // 각도 제한 상한
         }
 
         // CSC 포맷으로 변환
@@ -413,6 +430,8 @@ private:
     Eigen::VectorXd endpoint_acc;
     rclcpp::TimerBase::SharedPtr timer_;
     bool joint_states_received = false;
+
+    rclcpp::Time start_time_;
 };
 
 int main(int argc, char *argv[])
