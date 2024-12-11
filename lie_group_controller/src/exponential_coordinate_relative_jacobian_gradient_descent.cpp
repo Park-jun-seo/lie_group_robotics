@@ -12,6 +12,7 @@ using std::placeholders::_1;
 using JointStates = sensor_msgs::msg::JointState;
 double delta_time = 8;
 
+// 미완성
 class LEG : public rclcpp::Node
 {
 public:
