@@ -43,8 +43,10 @@ set(dependencies
 add_library(lie_group_controller_lib
   src/operational_space_control.cpp
   src/ik_newton_raphson.cpp
-  src/ik_newton_raphson_qp.cpp
   src/ik_newton_raphson_qp_constraints.cpp
+  src/euler_integration_gradient_descent.cpp
+  src/modified_euler_integration_gradient_descent.cpp
+  src/runge_kutta_gradient_descent.cpp
 )
 ament_target_dependencies(lie_group_controller_lib ${dependencies})
 target_link_libraries(lie_group_controller_lib
@@ -65,6 +67,17 @@ add_executable(ik_newton_raphson_qp_constraints src/ik_newton_raphson_qp_constra
 ament_target_dependencies(ik_newton_raphson_qp_constraints ${dependencies})
 target_link_libraries(ik_newton_raphson_qp_constraints lie_group_controller_lib)
 
+add_executable(euler_integration_gradient_descent src/euler_integration_gradient_descent.cpp)
+ament_target_dependencies(euler_integration_gradient_descent ${dependencies})
+target_link_libraries(euler_integration_gradient_descent lie_group_controller_lib)
+
+add_executable(modified_euler_integration_gradient_descent src/modified_euler_integration_gradient_descent.cpp)
+ament_target_dependencies(modified_euler_integration_gradient_descent ${dependencies})
+target_link_libraries(modified_euler_integration_gradient_descent lie_group_controller_lib)
+
+add_executable(runge_kutta_gradient_descent src/runge_kutta_gradient_descent.cpp)
+ament_target_dependencies(runge_kutta_gradient_descent ${dependencies})
+target_link_libraries(runge_kutta_gradient_descent lie_group_controller_lib)
 ################################################################################
 # Install
 ################################################################################
@@ -81,6 +94,9 @@ install(TARGETS
   operational_space_control_node
   ik_newton_raphson_node
   ik_newton_raphson_qp_constraints
+  euler_integration_gradient_descent
+  modified_euler_integration_gradient_descent
+  runge_kutta_gradient_descent
   DESTINATION lib/${PROJECT_NAME}
 )
 
