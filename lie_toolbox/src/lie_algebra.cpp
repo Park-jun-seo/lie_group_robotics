@@ -228,3 +228,107 @@ Eigen::VectorXd LieAlgebra::LogarithmMapSE3(const Eigen::Matrix4d &T)
 
     return xi;
 }
+
+Eigen::Matrix3d LieAlgebra::DifferentialExponentialMapSO3(const Eigen::Vector3d &xi)
+{
+    double theta = xi.norm();
+    if (theta == 0)
+    {
+        return Eigen::Matrix3d::Identity();
+    }
+
+    Eigen::Matrix3d xi_hat = Ceil3DVectorOperator(xi / theta);
+    double alpha = std::sin(theta) / theta;
+    double beta = (1 - std::cos(theta)) / (theta * theta);
+
+    Eigen::Matrix3d dexp = Eigen::Matrix3d::Identity() + (beta / 2) * xi_hat + ((1 - alpha) / (theta * theta)) * (xi_hat * xi_hat);
+    return dexp;
+}
+
+Eigen::Matrix3d LieAlgebra::InverseDifferentialExponentialMapSO3(const Eigen::Vector3d &xi)
+{
+    double theta = xi.norm();
+    if (theta == 0)
+    {
+        return Eigen::Matrix3d::Identity();
+    }
+
+    Eigen::Matrix3d xi_hat = Ceil3DVectorOperator(xi / theta);
+    double alpha = std::sin(theta) / theta;
+    double beta = (1 - std::cos(theta)) / (theta * theta);
+    double gamma = alpha / beta;
+
+    Eigen::Matrix3d dexp_inv = Eigen::Matrix3d::Identity() - 0.5 * xi_hat + ((1 - gamma) / (theta * theta)) * (xi_hat * xi_hat);
+    return dexp_inv;
+}
+
+// Differential of the exponential map for SE(3)
+Eigen::MatrixXd LieAlgebra::DifferentialExponentialMapSE3(const Eigen::VectorXd &xi)
+{
+    assert(xi.size() == 6);
+
+    Eigen::Vector3d xi_v = xi.head<3>();
+    Eigen::Vector3d xi_omega = xi.tail<3>();
+
+    double theta = xi_omega.norm();
+    Eigen::Matrix3d dexp_omega = DifferentialExponentialMapSO3(xi_omega);
+
+    Eigen::Matrix3d C_xi;
+    if (theta == 0)
+    {
+        C_xi = Ceil3DVectorOperator(xi_v);
+    }
+    else
+    {
+        Eigen::Matrix3d omega_hat = Ceil3DVectorOperator(xi_omega / theta);
+        double alpha = std::sin(theta) / theta;
+        double beta = (1 - std::cos(theta)) / (theta * theta);
+
+        C_xi = (beta / 2) * Ceil3DVectorOperator(xi_v) + ((1 - alpha) / (theta * theta)) * (Ceil3DVectorOperator(xi_v) * omega_hat + omega_hat * Ceil3DVectorOperator(xi_v)) +
+               ((alpha - beta) / (theta * theta)) * (xi_omega.dot(xi_v) * omega_hat);
+    }
+
+    Eigen::MatrixXd dexp(6, 6);
+    dexp.block<3, 3>(0, 0) = dexp_omega;
+    dexp.block<3, 3>(0, 3) = C_xi;
+    dexp.block<3, 3>(3, 0) = Eigen::Matrix3d::Zero();
+    dexp.block<3, 3>(3, 3) = dexp_omega;
+
+    return dexp;
+}
+
+// Inverse differential of the exponential map for SE(3)
+Eigen::MatrixXd LieAlgebra::InverseDifferentialExponentialMapSE3(const Eigen::VectorXd &xi)
+{
+    assert(xi.size() == 6);
+
+    Eigen::Vector3d xi_v = xi.head<3>();
+    Eigen::Vector3d xi_omega = xi.tail<3>();
+
+    double theta = xi_omega.norm();
+    Eigen::Matrix3d dexp_inv_omega = InverseDifferentialExponentialMapSO3(xi_omega);
+
+    Eigen::Matrix3d D_xi;
+    if (theta == 0)
+    {
+        D_xi = -0.5 * Ceil3DVectorOperator(xi_v);
+    }
+    else
+    {
+        Eigen::Matrix3d omega_hat = Ceil3DVectorOperator(xi_omega / theta);
+        double alpha = std::sin(theta) / theta;
+        double beta = (1 - std::cos(theta)) / (theta * theta);
+        double gamma = (alpha - beta) / (theta * theta);
+
+        D_xi = -0.5 * Ceil3DVectorOperator(xi_v) + ((1 - gamma) / (theta * theta)) * (Ceil3DVectorOperator(xi_v) * omega_hat + omega_hat * Ceil3DVectorOperator(xi_v)) +
+               ((1 / beta + gamma - 2) / (theta * theta)) * (xi_omega.dot(xi_v) * omega_hat);
+    }
+
+    Eigen::MatrixXd dexp_inv(6, 6);
+    dexp_inv.block<3, 3>(0, 0) = dexp_inv_omega;
+    dexp_inv.block<3, 3>(0, 3) = D_xi;
+    dexp_inv.block<3, 3>(3, 0) = Eigen::Matrix3d::Zero();
+    dexp_inv.block<3, 3>(3, 3) = dexp_inv_omega;
+
+    return dexp_inv;
+}

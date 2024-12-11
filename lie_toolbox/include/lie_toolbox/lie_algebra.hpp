@@ -42,6 +42,10 @@ namespace liegroup
         static Eigen::Vector3d LogarithmMapSO3(const Eigen::Matrix3d &R);
         // SE3 행렬로 xi 와 eta를 계산하는 함수
         static Eigen::VectorXd LogarithmMapSE3(const Eigen::Matrix4d &T);
+        static Eigen::Matrix3d DifferentialExponentialMapSO3(const Eigen::Vector3d &xi);
+        static Eigen::Matrix3d InverseDifferentialExponentialMapSO3(const Eigen::Vector3d &xi);
+        static Eigen::MatrixXd DifferentialExponentialMapSE3(const Eigen::VectorXd &xi);
+        static Eigen::MatrixXd InverseDifferentialExponentialMapSE3(const Eigen::VectorXd &xi);
     };
 
     inline Eigen::Matrix4d GetTransformationMatrix(const double x, double y, double z, double roll, double pitch, double yaw)
