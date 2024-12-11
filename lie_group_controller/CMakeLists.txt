@@ -47,6 +47,7 @@ add_library(lie_group_controller_lib
   src/euler_integration_gradient_descent.cpp
   src/modified_euler_integration_gradient_descent.cpp
   src/runge_kutta_gradient_descent.cpp
+  src/exponential_coordinate_relative_jacobian_gradient_descent.cpp
 )
 ament_target_dependencies(lie_group_controller_lib ${dependencies})
 target_link_libraries(lie_group_controller_lib
@@ -78,6 +79,10 @@ target_link_libraries(modified_euler_integration_gradient_descent lie_group_cont
 add_executable(runge_kutta_gradient_descent src/runge_kutta_gradient_descent.cpp)
 ament_target_dependencies(runge_kutta_gradient_descent ${dependencies})
 target_link_libraries(runge_kutta_gradient_descent lie_group_controller_lib)
+
+add_executable(exponential_coordinate_relative_jacobian_gradient_descent src/exponential_coordinate_relative_jacobian_gradient_descent.cpp)
+ament_target_dependencies(exponential_coordinate_relative_jacobian_gradient_descent ${dependencies})
+target_link_libraries(exponential_coordinate_relative_jacobian_gradient_descent lie_group_controller_lib)
 ################################################################################
 # Install
 ################################################################################
@@ -97,6 +102,7 @@ install(TARGETS
   euler_integration_gradient_descent
   modified_euler_integration_gradient_descent
   runge_kutta_gradient_descent
+  exponential_coordinate_relative_jacobian_gradient_descent
   DESTINATION lib/${PROJECT_NAME}
 )
 

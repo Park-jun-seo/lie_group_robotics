@@ -164,6 +164,14 @@ Eigen::Matrix4d LieAlgebra::ExponentialMapSE3(const Eigen::VectorXd &xi)
     Eigen::Matrix3d R = ExponentialMapSO3(omega);
 
     double theta = omega.norm();
+    if (theta == 0)
+    {
+        Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
+        T.block<3, 3>(0, 0) = R;
+        T.block<3, 1>(0, 3) = v;
+        return T;
+    }
+
     Eigen::Matrix3d omega_hat = Ceil3DVectorOperator(omega);
 
     Eigen::Matrix3d I = Eigen::Matrix3d::Identity();
@@ -180,7 +188,9 @@ Eigen::Matrix4d LieAlgebra::ExponentialMapSE3(const Eigen::VectorXd &xi)
 double LieAlgebra::ComputeThetaFromTrace(const Eigen::Matrix3d &R)
 {
     double trace = R.trace();
-    double theta = 2 * std::asin(std::sqrt((3 - trace) / 2));
+    double value = (3 - trace) / 2;
+    value = liegroup::Clamp(value, 0.0, 1.0); // Ensure numerical stability
+    double theta = 2 * std::asin(std::sqrt(value));
     return theta;
 }
 

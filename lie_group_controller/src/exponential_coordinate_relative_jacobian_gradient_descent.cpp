@@ -108,6 +108,7 @@ private:
             // 관절 상태를 수신할 때까지 계산을 건너뜁니다
             return;
         }
+
         // 현재 각도와 속도를 사용하여 엔드 이펙터 위치 계산
         Eigen::VectorXd theta(joint_positions.size());
         for (size_t i = 0; i < joint_positions.size(); ++i)
@@ -116,11 +117,9 @@ private:
         }
 
         const double tolerance = 1e-4; // 원하는 위치 오차 임계값 설정
-        const double time_step = 0.1; // 학습률 설정
+        const double time_step = 0.1;  // 학습률 설정
 
-        Eigen::VectorXd current_pose = ForwardKinematics(theta);
-        // 목표 위치로의 편차 계산 (현재는 단순히 원하는 위치로 설정)
-        // 시간에 따른 사인파 생성
+        // 시간에 따른 사인파 목표 z 위치 생성
         double elapsed_time = (this->now() - start_time_).seconds();
         double amplitude = 0.1; // 사인파의 진폭 (미터 단위)
         double frequency = 0.5; // 사인파의 주파수 (Hz)
@@ -128,50 +127,75 @@ private:
         double base_z = -0.5; // 기본 z 위치
         double z = amplitude * sin(omega * elapsed_time) + base_z;
 
-        // 원하는 위치와 회전을 설정 (z축만 사인파로 변경)
+        // 목표 위치와 회전을 SE(3) 변환 행렬로 설정
         Eigen::VectorXd p_des(6);
-        p_des << 0.1, 0.0, z, liegroup::DegToRad(5.0), liegroup::DegToRad(20.0), liegroup::DegToRad(40.0);
+        p_des << 0.1, 0.0, -0.5, liegroup::DegToRad(5.0), liegroup::DegToRad(20.0), liegroup::DegToRad(40.0);
+        Eigen::Matrix4d T_desired = liegroup::GetTransformationMatrix(p_des(0), p_des(1), p_des(2), p_des(3), p_des(4), p_des(5));
 
+        // 현재 위치를 SE(3) 변환 행렬로 계산
+        Eigen::Matrix4d T_current = ForwardKinematicsSE3(theta);
+
+        // 상대 변환 계산
+        Eigen::Matrix4d T_relative = T_current.inverse() * T_desired;
+
+        // 반복 계산 시작
+        auto start_time_calc = std::chrono::high_resolution_clock::now();
         int iteration = 0;
 
-        Eigen::VectorXd delta_p = p_des - ForwardKinematics(theta);
-
-        // 반복 종료 조건
-        if (delta_p.norm() < tolerance)
-        {
-            return;
-        }
-        auto start_time_calc = std::chrono::high_resolution_clock::now();
         while (true)
         {
-            // 순방향 운동학 계산
+            // 현재 위치와 목표 위치의 상대 변환 재계산
+            T_current = ForwardKinematicsSE3(theta);
+            T_relative = T_current.inverse() * T_desired;
+            // std::cout << "T_relative: " << std::endl
+            //           << T_relative << std::endl;
+            // 상대 변환에서 오차 추출
+            Eigen::VectorXd lambda = liegroup::LieAlgebra::LogarithmMapSE3(T_relative);
 
-            Eigen::VectorXd current_pose = ForwardKinematics(theta);
-            // for (double e : current_pose)
-            // {
-            //     std::cout << std::fixed << std::setprecision(3) << e << " ";
-            // }
-            // std::cout << std::endl;
-            Eigen::VectorXd delta_p = p_des - current_pose;
-
-            // 만약 편차가 임계값 이하로 작아지면 반복을 종료
-            if (delta_p.norm() < tolerance)
+            // 반복 종료 조건: 오차가 임계값 이하
+            if (lambda.norm() < tolerance)
             {
                 break;
             }
-            // 자코비안 계산
-            Eigen::MatrixXd J = ComputeJacobian([this](const Eigen::VectorXd &theta)
-                                                { return ForwardKinematics(theta); }, theta);
-            // Gradient Descent 업데이트
-            Eigen::VectorXd delta_theta = J.transpose() * delta_p * time_step;
+
+            // 상대 자코비안 계산
+            double h = 1e-3;
+            std::vector<Eigen::Matrix4d> dT_dtheta(theta.size());
+            {
+                for (int i = 0; i < (int)theta.size(); i++)
+                {
+                    Eigen::VectorXd theta_plus = theta;
+                    Eigen::VectorXd theta_minus = theta;
+
+                    theta_plus(i) += h;
+                    theta_minus(i) -= h;
+
+                    Eigen::Matrix4d T_plus = ForwardKinematicsSE3(theta_plus);
+                    Eigen::Matrix4d T_minus = ForwardKinematicsSE3(theta_minus);
+
+                    dT_dtheta[i] = (T_plus - T_minus) / (2.0 * h);
+                }
+            }
+
+            Eigen::MatrixXd J = ComputeRelativeJacobian(T_relative, dT_dtheta);
+            // std::cout << "J: " << std::endl
+            //           << J << std::endl;
+
+            // 유사 역행렬을 사용한 업데이트
+            Eigen::MatrixXd J_pseudo_inverse = DampedLeastSquaresInverse(J, 1e-3);
+            Eigen::VectorXd delta_theta = -time_step * J_pseudo_inverse * lambda;
+            // Eigen::MatrixXd J_pseudo_inverse = DampedLeastSquaresInverse(J, 1e-3);
+            // Eigen::VectorXd delta_theta = -time_step * J.transpose() * lambda;
+            // Eigen::VectorXd delta_theta = -time_step * J.transpose() * lambda;
             theta += delta_theta;
             iteration++;
         }
-        auto end_time_calc = std::chrono::high_resolution_clock::now();
-        auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time_calc - start_time_calc).count(); // 나노초 단위
-        double duration_ms = duration_ns / 1e6;                                                                 // 나노초를 밀리초로 변환
 
-        // 걸린 시간 출력
+        auto end_time_calc = std::chrono::high_resolution_clock::now();
+        auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time_calc - start_time_calc).count();
+        double duration_ms = duration_ns / 1e6; // 나노초를 밀리초로 변환
+
+        // 결과 출력
         RCLCPP_INFO(this->get_logger(), "While 문이 반복을 완료하는데 걸린 시간: %.3f ms | 횟수: %d", duration_ms, iteration);
 
         // 메시지 퍼블리싱
@@ -183,18 +207,9 @@ private:
             joint_state_msg.position.push_back(theta[joint_name_to_number[joint_name]]);
         }
         joint_publisher_->publish(joint_state_msg);
-
-        // geometry_msgs::msg::Twist position_msg;
-        // position_msg.linear.x = current_pose(0);
-        // position_msg.linear.y = current_pose(1);
-        // position_msg.linear.z = current_pose(2);
-        // position_msg.angular.x = current_pose(3);
-        // position_msg.angular.y = current_pose(4);
-        // position_msg.angular.z = current_pose(5);
-        // position_publisher_->publish(position_msg);
     }
 
-    Eigen::VectorXd ForwardKinematics(const Eigen::VectorXd &theta)
+    Eigen::Matrix4d ForwardKinematicsSE3(const Eigen::VectorXd &theta)
     {
         Eigen::Matrix4d offset_joint_0_T_1;
         Eigen::Matrix4d offset_joint_1_T_2;
@@ -284,44 +299,50 @@ private:
         Eigen::Matrix4d adjacent_T_5 = offset_joint_4_T_5 * joint_T_5;
         Eigen::Matrix4d adjacent_T_6 = offset_joint_5_T_6 * joint_T_6;
         Eigen::Matrix4d adjacent_T_7 = offset_joint_6_T_7;
-        T_goal = T_goal * adjacent_T_1 * adjacent_T_2 * adjacent_T_3 * adjacent_T_4 * adjacent_T_5 * adjacent_T_6 * adjacent_T_7;
-        Eigen::VectorXd result(6);
+        return T_goal = T_goal * adjacent_T_1 * adjacent_T_2 * adjacent_T_3 * adjacent_T_4 * adjacent_T_5 * adjacent_T_6 * adjacent_T_7;
+        // Eigen::VectorXd result(6);
 
-        // Position (x, y, z)
-        result[0] = T_goal(0, 3);
-        result[1] = T_goal(1, 3);
-        result[2] = T_goal(2, 3);
+        // // Position (x, y, z)
+        // result[0] = T_goal(0, 3);
+        // result[1] = T_goal(1, 3);
+        // result[2] = T_goal(2, 3);
 
-        // Orientation (roll, pitch, yaw) using intrinsic Tait-Bryan angles (XYZ convention)
-        double roll = atan2(T_goal(2, 1), T_goal(2, 2));
-        double pitch = atan2(-T_goal(2, 0), sqrt(T_goal(2, 1) * T_goal(2, 1) + T_goal(2, 2) * T_goal(2, 2)));
-        double yaw = atan2(T_goal(1, 0), T_goal(0, 0));
+        // // Orientation (roll, pitch, yaw) using intrinsic Tait-Bryan angles (XYZ convention)
+        // double roll = atan2(T_goal(2, 1), T_goal(2, 2));
+        // double pitch = atan2(-T_goal(2, 0), sqrt(T_goal(2, 1) * T_goal(2, 1) + T_goal(2, 2) * T_goal(2, 2)));
+        // double yaw = atan2(T_goal(1, 0), T_goal(0, 0));
 
-        result[3] = roll;
-        result[4] = pitch;
-        result[5] = yaw;
+        // result[3] = roll;
+        // result[4] = pitch;
+        // result[5] = yaw;
 
-        return result;
+        // return result;
     }
 
-    Eigen::MatrixXd ComputeJacobian(std::function<Eigen::VectorXd(Eigen::VectorXd)> func, const Eigen::VectorXd &theta)
+    Eigen::MatrixXd ComputeRelativeJacobian(
+        const Eigen::Matrix4d &T_relative,
+        const std::vector<Eigen::Matrix4d> &dT_dtheta)
     {
-        int m = func(theta).size(); // 출력 벡터의 크기 (6)
-        int n = theta.size();       // 입력 벡터의 크기 (6)
-        Eigen::MatrixXd J(m, n);    // 자코비안 행렬 생성
+        int n = dT_dtheta.size(); // Number of joints
+        Eigen::MatrixXd J(6, n);  // Relative Jacobian (6 x n)
 
-        double h = 1e-6; // 작은 변화량 (유한 차분)
-        Eigen::VectorXd theta_perturbed = theta;
+        // Step 1: Compute lambda using logarithm map
+        Eigen::VectorXd lambda = liegroup::LieAlgebra::LogarithmMapSE3(T_relative);
 
-        for (int i = 0; i < n; ++i)
+        // Step 2: Compute dexp(-lambda)
+        // Eigen::MatrixXd dexp_neg_lambda = liegroup::LieAlgebra::InverseDifferentialExponentialMapSE3(lambda);
+        Eigen::MatrixXd dexp_neg_lambda = liegroup::LieAlgebra::DifferentialExponentialMapSE3(lambda);
+
+        // Step 3: Compute J_k for each joint
+        for (int k = 0; k < n; ++k)
         {
-            theta_perturbed = theta;
-            theta_perturbed(i) += h;
+            Eigen::Matrix4d dT_k = dT_dtheta[k];
+            Eigen::Matrix4d T_inv_dT = T_relative.inverse() * dT_k;
 
-            Eigen::VectorXd f_plus = func(theta_perturbed); // f(theta + h)
-            Eigen::VectorXd f_minus = func(theta);          // f(theta)
-
-            J.col(i) = (f_plus - f_minus) / h; // 유한 차분 계산
+            // Convert T_inv_dT to se(3) vector form
+            Eigen::VectorXd se3_vector = liegroup::LieAlgebra::Floor6DVectorOperator(T_inv_dT);
+            // J.col(k) = dexp_neg_lambda * se3_vector;
+            J.col(k) = se3_vector;
         }
 
         return J;
