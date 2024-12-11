@@ -143,3 +143,88 @@ Eigen::MatrixXd LieAlgebra::CreateAdjointMatrix(const Eigen::VectorXd &V)
 
     return adv;
 }
+
+Eigen::Matrix3d LieAlgebra::ExponentialMapSO3(const Eigen::Vector3d &omega)
+{
+    double theta = omega.norm();
+    if (theta == 0)
+        return Eigen::Matrix3d::Identity();
+
+    Eigen::Matrix3d omega_hat = Ceil3DVectorOperator(omega / theta);
+    Eigen::Matrix3d R = Eigen::Matrix3d::Identity() + std::sin(theta) * omega_hat + (1 - std::cos(theta)) * (omega_hat * omega_hat);
+    return R;
+}
+
+Eigen::Matrix4d LieAlgebra::ExponentialMapSE3(const Eigen::VectorXd &xi)
+{
+    assert(xi.size() == 6);
+    Eigen::Vector3d omega = xi.tail<3>();
+    Eigen::Vector3d v = xi.head<3>();
+
+    Eigen::Matrix3d R = ExponentialMapSO3(omega);
+
+    double theta = omega.norm();
+    Eigen::Matrix3d omega_hat = Ceil3DVectorOperator(omega);
+
+    Eigen::Matrix3d I = Eigen::Matrix3d::Identity();
+
+    Eigen::Vector3d t = (1 / (theta * theta)) * ((I - R) * (omega_hat * v) + omega * (omega.transpose() * v));
+
+    Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
+    T.block<3, 3>(0, 0) = R;
+    T.block<3, 1>(0, 3) = t;
+
+    return T;
+}
+
+double LieAlgebra::ComputeThetaFromTrace(const Eigen::Matrix3d &R)
+{
+    double trace = R.trace();
+    double theta = 2 * std::asin(std::sqrt((3 - trace) / 2));
+    return theta;
+}
+
+Eigen::Vector3d LieAlgebra::LogarithmMapSO3(const Eigen::Matrix3d &R)
+{
+    double theta = ComputeThetaFromTrace(R);
+
+    if (theta == 0)
+    {
+        return Eigen::Vector3d::Zero(); // Identity rotation
+    }
+
+    Eigen::Matrix3d skew_symmetric = (R - R.transpose()) / (2 * std::sin(theta));
+    Eigen::Vector3d xi = Floor3DVectorOperator(skew_symmetric) * theta;
+
+    return xi;
+}
+
+Eigen::VectorXd LieAlgebra::LogarithmMapSE3(const Eigen::Matrix4d &T)
+{
+    // Extract rotation matrix R and translation vector t
+    Eigen::Matrix3d R = T.block<3, 3>(0, 0);
+    Eigen::Vector3d t = T.block<3, 1>(0, 3);
+
+    // Compute rotation vector xi_omega using LogarithmMapSO3
+    Eigen::Vector3d xi_omega = LogarithmMapSO3(R);
+
+    double theta = xi_omega.norm(); // Magnitude of rotation vector
+
+    // Handle the special case of theta = 0 (no rotation)
+    if (theta == 0)
+    {
+        return (Eigen::VectorXd(6) << t, Eigen::Vector3d::Zero()).finished();
+    }
+
+    // Compute translation part xi_v
+    Eigen::Matrix3d omega_hat = Ceil3DVectorOperator(xi_omega / theta);
+    Eigen::Matrix3d V_inv = Eigen::Matrix3d::Identity() - 0.5 * omega_hat + (1 - theta / (2 * std::tan(theta / 2))) / (theta * theta) * (omega_hat * omega_hat);
+    Eigen::Vector3d xi_v = V_inv * t;
+
+    // Combine xi_v and xi_omega into the full twist xi
+    Eigen::VectorXd xi(6);
+    xi.head<3>() = xi_v;
+    xi.tail<3>() = xi_omega;
+
+    return xi;
+}

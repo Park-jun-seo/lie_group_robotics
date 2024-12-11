@@ -32,6 +32,16 @@ namespace liegroup
         static Eigen::MatrixXd AdOperator(const Eigen::VectorXd &twist);
         // co adjoint 를 계산하는 함수 -1 * adjoint operator의 transpose
         static Eigen::MatrixXd CoAdOperator(const Eigen::VectorXd &twist);
+        // xi로 SO3 행렬을 계산하는 함수
+        static Eigen::Matrix3d ExponentialMapSO3(const Eigen::Vector3d &omega);
+        // xi 와 eta로 SE3 지수맵 행렬을 계산하는 함수
+        static Eigen::Matrix4d ExponentialMapSE3(const Eigen::VectorXd &xi);
+        // Trace로 SO3 의 크기 계산
+        static double ComputeThetaFromTrace(const Eigen::Matrix3d &R);
+        // SO3 행렬로 xi 계산하는 함수
+        static Eigen::Vector3d LogarithmMapSO3(const Eigen::Matrix3d &R);
+        // SE3 행렬로 xi 와 eta를 계산하는 함수
+        static Eigen::VectorXd LogarithmMapSE3(const Eigen::Matrix4d &T);
     };
 
     inline Eigen::Matrix4d GetTransformationMatrix(const double x, double y, double z, double roll, double pitch, double yaw)
