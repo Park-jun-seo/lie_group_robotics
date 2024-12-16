@@ -23,6 +23,7 @@ find_package(geometry_msgs REQUIRED)
 install(PROGRAMS
   src/arm_test.py
   src/leg_test.py
+  src/leg_torque_test.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -115,8 +115,8 @@ private:
         // 각도 제한 설정
         Eigen::VectorXd theta_min(6); // 최소 각도 제한
         Eigen::VectorXd theta_max(6); // 최대 각도 제한
-        theta_min << -3.14, -3.14, -3.14, -3.14, -3.14, -3.14;
-        theta_max << 3.14, 3.14, 3.14, 2.0, 3.14, 3.14;
+        theta_min << -3.14, -3.14, -3.14, 0, -3.14, -3.14;
+        theta_max << 0, 3.14, 3.14, 3.14, 3.14, 3.14;
 
         // 현재 각도와 속도를 사용하여 엔드 이펙터 위치 계산
         Eigen::VectorXd theta(joint_positions.size());

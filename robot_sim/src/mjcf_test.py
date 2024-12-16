@@ -20,7 +20,7 @@ class MujocoNode(Node):
 
     def mujoco(self):
         current_script_path = os.path.abspath(__file__)
-        root = "src/lie_group_robotics/robot_sim/mjcf/leg/scene.xml"
+        root = "lie_group_robotics/robot_sim/mjcf/leg/scene.xml"
         m = mujoco.MjModel.from_xml_path(root)
         d = mujoco.MjData(m)
         with mujoco.viewer.launch_passive(m, d, key_callback=self.key_callback) as viewer:
@@ -28,7 +28,8 @@ class MujocoNode(Node):
             zero_time = d.time
             while 1:
                 step_start = time.time()
-
+                # print(m.body_ipos)
+                print(m.body_inertia)
                 if not self.paused:
                     mujoco.mj_step(m, d)
                     viewer.sync()
