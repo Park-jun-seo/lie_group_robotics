@@ -1,13 +1,10 @@
 <mujoco>
     <actuator>
-        <position joint="l_hip_p" name="l_hip_p" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="2700"/>
-        <position joint="l_hip_r" name="l_hip_r" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="2700"/>
         <position joint="l_hip_y" name="l_hip_y" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="2700"/>
+        <position joint="l_hip_r" name="l_hip_r" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="2700"/>
+        <position joint="l_hip_p" name="l_hip_p" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="2700"/>
         <position joint="l_knee_p" name="l_knee_p" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="2700"/>
-        <position joint="l_ankle_p" name="l_ankle_p" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="2700"/>
         <position joint="l_ankle_r" name="l_ankle_r" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="2700"/>
-
-   
-
+        <position joint="l_ankle_p" name="l_ankle_p" ctrlrange="-3.14159 3.14159" ctrllimited="true" kp="2700"/>
     </actuator>
 </mujoco>

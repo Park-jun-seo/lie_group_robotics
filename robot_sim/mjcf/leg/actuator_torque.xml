@@ -1,10 +1,10 @@
 <mujoco>
     <actuator>
-        <general name="l_hip_p" ctrlrange="-50 50" joint="l_hip_p"/>
-        <general name="l_hip_r" ctrlrange="-50 50" joint="l_hip_r"/>
         <general name="l_hip_y" ctrlrange="-50 50" joint="l_hip_y"/>
+        <general name="l_hip_r" ctrlrange="-50 50" joint="l_hip_r"/>
+        <general name="l_hip_p" ctrlrange="-50 50" joint="l_hip_p"/>
         <general name="l_knee_p" ctrlrange="-50 50" joint="l_knee_p"/>
+         <general name="l_ankle_r" ctrlrange="-50 50" joint="l_ankle_r"/>
         <general name="l_ankle_p" ctrlrange="-50 50" joint="l_ankle_p"/>
-        <general name="l_ankle_r" ctrlrange="-50 50" joint="l_ankle_r"/>
     </actuator>
 </mujoco>

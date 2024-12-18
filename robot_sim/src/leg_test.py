@@ -16,21 +16,21 @@ from geometry_msgs.msg import Pose2D
 from diagnostic_msgs.msg import KeyValue
 
 pos = {
-    "l_hip_p": 0,
-    "l_hip_r": 0,
     "l_hip_y": 0,
+    "l_hip_r": 0,
+    "l_hip_p": 0,
     "l_knee_p": 0,
-    "l_ankle_p": 0,
     "l_ankle_r": 0,
+    "l_ankle_p": 0,
 }
 
 joint = [
-    "l_hip_p",
-    "l_hip_r",
     "l_hip_y",
+    "l_hip_r",
+    "l_hip_p",
     "l_knee_p",
-    "l_ankle_p",
     "l_ankle_r",
+    "l_ankle_p",
 ]
 
 class MujocoNode(Node):

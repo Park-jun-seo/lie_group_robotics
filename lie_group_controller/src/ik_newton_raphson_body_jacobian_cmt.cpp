@@ -18,7 +18,7 @@ class LEG : public rclcpp::Node
 {
 public:
     std::vector<std::string> joint_names = {
-        "l_hip_p", "l_hip_r", "l_hip_y", "l_knee_p", "l_ankle_p", "l_ankle_r"};
+        "l_hip_y", "l_hip_r", "l_hip_p", "l_knee_p", "l_ankle_r", "l_ankle_p"};
     // 각 관절 이름에 대한 인덱스를 매핑하는 맵
     std::unordered_map<std::string, int> joint_name_to_number;
 
@@ -60,6 +60,8 @@ public:
             node_clock,
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::duration<double>(4 / 1000)),
             std::bind(&LEG::Calc, this));
+
+        body_jacobian = new liegroup::IncrementalJacobian(7, 250);
 
         joint_positions.resize(joint_names.size());
         cmd_joint_positions.resize(joint_names.size());
@@ -151,13 +153,13 @@ public:
         Eigen::VectorXd e_offset_6(6);
         e_offset_6 << inertia_offset_6(0, 3), inertia_offset_6(1, 3), inertia_offset_6(2, 3), 0, 0, 1;
         e_offset = {e_offset_1, e_offset_2, e_offset_3, e_offset_4, e_offset_5, e_offset_6};
-        for (int i = 0; i < 6; ++i)
+        for (int i = 0; i < 7; ++i)
         {
             Eigen::VectorXd twist = Eigen::VectorXd::Zero(6); // 6x1 영 벡터
             body_twist.push_back(twist);
         }
 
-        for (int i = 0; i < 6; ++i)
+        for (int i = 0; i < 7; ++i)
         {
             Eigen::VectorXd twist = Eigen::VectorXd::Zero(6); // 6x1 영 벡터
             body_twist_dot.push_back(twist);
@@ -212,12 +214,12 @@ private:
         Eigen::VectorXd curr_theta_dot(joint_positions.size());
         Eigen::VectorXd des_theta_dot(joint_positions.size());
         Eigen::VectorXd torque(joint_positions.size());
-        for (size_t i = 0; i < joint_positions.size(); ++i)
+        for (size_t i = 0; i < joint_names.size(); ++i)
         {
-            curr_theta(i) = joint_positions[i];
-            des_theta(i) = joint_positions[i];
-
-            curr_theta_dot(i) = joint_velocities[i];
+            const std::string &joint_name = joint_names[i];
+            curr_theta[i] = joint_positions[joint_name_to_number[joint_name]];
+            des_theta[i] = joint_positions[joint_name_to_number[joint_name]];
+            curr_theta_dot[i] = joint_velocities[joint_name_to_number[joint_name]];
             des_theta_dot(i) = 0;
             torque(i) = 0;
         }
@@ -229,7 +231,6 @@ private:
         theta_min << -3.14, -3.14, -3.14, -3.14, -3.14, -3.14;
         theta_max << 3.14, 3.14, 3.14, 3.14, 3.14, 3.14;
 
-        // Eigen::VectorXd current_pose = ForwardKinematics(curr_theta);
         // std::cout << ComputeMassMatrix() << std::endl;
         // std::cout << ComputeCorioliMatrix() << std::endl;
         // std::cout << ComputeGravityMatrix() << std::endl;
@@ -247,7 +248,7 @@ private:
 
         // 원하는 위치와 회전을 설정 (z축만 사인파로 변경)
         Eigen::VectorXd p_des(6);
-        p_des << 0.0, 0.0, z, liegroup::DegToRad(0.0), liegroup::DegToRad(0.0), liegroup::DegToRad(0.0);
+        p_des << 0.0, 0.0, z, liegroup::DegToRad(5.0), liegroup::DegToRad(10.0), liegroup::DegToRad(20.0);
 
         // int iteration = 0;
 
@@ -258,87 +259,34 @@ private:
         {
             return;
         }
-        // auto start_time_calc = std::chrono::high_resolution_clock::now();
+        auto start_time_calc = std::chrono::high_resolution_clock::now();
 
-        Eigen::MatrixXd J = ComputeJacobian([this](const Eigen::VectorXd &theta)
-                                            { return ForwardKinematics(theta); }, curr_theta);
-        SolveOptimization(J, delta_p, des_theta_dot, curr_theta, theta_min, theta_max);
-
-        // while (true)
-        // {
-        //     // 순방향 운동학 계산
-
-        //     Eigen::VectorXd current_pose = ForwardKinematics(des_theta);
-        //     // for (double e : current_pose)
-        //     // {
-        //     //     std::cout << std::fixed << std::setprecision(3) << e << " ";
-        //     // }
-        //     // std::cout << std::endl;
-        //     Eigen::VectorXd delta_p = p_des - current_pose;
-
-        //     // 만약 편차가 임계값 이하로 작아지면 반복을 종료
-        //     if (delta_p.norm() < tolerance)
-        //     {
-        //         break;
-        //     }
-        //     // 자코비안 계산
-        //     Eigen::MatrixXd J = ComputeJacobian([this](const Eigen::VectorXd &theta)
-        //                                         { return ForwardKinematics(theta); }, des_theta);
-        //     // 뉴턴-랩슨 방법으로 각도 업데이트 (뎀프드 최소자승 역행렬 사용)
-
-        //     Eigen::VectorXd delta_theta = DampedLeastSquaresInverse(J, 1e-3) * delta_p;
-        //     des_theta += delta_theta;
-        //     des_theta_dot += delta_theta;
-        //     iteration++;
-        // }
-        // std::cout << ComputeMassMatrix() << std::endl;
-        // std::cout << ComputeCorioliMatrix() << std::endl;
-        // std::cout << ComputeGravityMatrix() << std::endl;
-        UpdateForwardKinematics();
-        Eigen::MatrixXd mass_matrix = ComputeMassMatrix();
-        Eigen::MatrixXd corioli_matrix = ComputeCorioliMatrix();
-        Eigen::VectorXd gravity_matrix = ComputeGravityMatrix();
-        std::cout << "-----------------" << std::endl;
-        std::cout << gravity_matrix << std::endl;
-        double dt = 0.001; // dt 설정
-        Eigen::VectorXd theta_t_dt = curr_theta + des_theta_dot * dt;
-        Eigen::MatrixXd J_dot = ComputeJacobianDot(
-            [this](const Eigen::VectorXd &theta)
-            {
-                return ForwardKinematics(theta);
-            },
-            curr_theta, // 현재 theta (t 시점)
-            theta_t_dt, // dt 후의 theta (t+dt 시점)
-            dt          // 시간 스텝
-        );
-
-        Eigen::VectorXd ref_theta_ddot(6);
         // Eigen::MatrixXd J = ComputeJacobian([this](const Eigen::VectorXd &theta)
         //                                     { return ForwardKinematics(theta); }, curr_theta);
-        ref_theta_ddot = J.inverse() * (Eigen::VectorXd::Zero(6) - J_dot * des_theta_dot);
 
-        Eigen::VectorXd Kp(6), Kv(6);
-        Kp << 10000, 10000, 10000, 10000, 10000, 10000; // 예: 큰 값의 P게인
-        Kv << 100, 100, 100, 100, 100, 100;                   // 예: D게인
-        Eigen::VectorXd e = des_theta - curr_theta;
-        Eigen::VectorXd dot_e = des_theta_dot - curr_theta_dot;
+        Eigen::MatrixXd JB = CalcBodyJacobian();
+        Eigen::MatrixXd JB_reduced = JB.block(0, 0, JB.rows(), JB.cols() - 1);
 
-        Eigen::VectorXd des_theta_ddot(6);
-        des_theta_ddot = ref_theta_ddot + Kv.asDiagonal() * dot_e + Kp.asDiagonal() * e;
-        // torque = mass_matrix * des_theta_ddot + corioli_matrix * des_theta_dot + gravity_matrix;
-        torque = mass_matrix * des_theta_ddot + corioli_matrix * curr_theta_dot  + gravity_matrix;
-        // torque = mass_matrix * des_theta_ddot + corioli_matrix * curr_theta_dot;
-        // torque = gravity_matrix;
+        //body jacobian
+        // std::cout << "1---------------" << std::endl;
+        
+        // std::cout << std::fixed << std::setprecision(3) << JB_reduced * curr_theta_dot << std::endl;
 
-        // std::cout << "-----------------" << std::endl;
-        // std::cout << torque << std::endl;
+        //analytic jacobian
+        // std::cout << "2---------------" << std::endl;
+        // std::cout << std::fixed << std::setprecision(3) << J * curr_theta_dot << std::endl;
 
-        // auto end_time_calc = std::chrono::high_resolution_clock::now();
-        // auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time_calc - start_time_calc).count(); // 나노초 단위
-        // double duration_ms = duration_ns / 1e6;                                                                           // 나노초를 밀리초로 변환
+
+        SolveOptimization(JB_reduced, delta_p, des_theta_dot, curr_theta, theta_min, theta_max);
+        // std::cout << des_theta_dot << std::endl;
+        auto end_time_calc = std::chrono::high_resolution_clock::now();
+        auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time_calc - start_time_calc).count(); // 나노초 단위
+        double duration_ms = duration_ns / 1e6;                                                                           // 나노초를 밀리초로 변환
 
         // 걸린 시간 출력
-        // RCLCPP_INFO(this->get_logger(), "While 문이 반복을 완료하는데 걸린 시간: %.3f ms | 횟수: %d", duration_ms, iteration);
+        RCLCPP_INFO(this->get_logger(), "While 문이 반복을 완료하는데 걸린 시간: %.3f ms", duration_ms);
+
+        des_theta = curr_theta + des_theta_dot;
 
         // 메시지 퍼블리싱
         auto joint_state_msg = sensor_msgs::msg::JointState();
@@ -346,7 +294,7 @@ private:
         for (const auto &joint_name : joint_names)
         {
             joint_state_msg.name.push_back(joint_name);
-            joint_state_msg.position.push_back(torque[joint_name_to_number[joint_name]]);
+            joint_state_msg.position.push_back(des_theta[joint_name_to_number[joint_name]]);
         }
         joint_publisher_->publish(joint_state_msg);
     }
@@ -598,8 +546,8 @@ private:
         Eigen::Matrix4d joint_T_6;
 
         //  "l_hip_p", "l_hip_r", "l_hip_y", "l_knee_p", "l_ankle_p", "l_ankle_r"
-        joint_T_1 << cos(theta(2)), -sin(theta(2)), 0, 0,
-            sin(theta(2)), cos(theta(2)), 0, 0,
+        joint_T_1 << cos(theta(0)), -sin(theta(0)), 0, 0,
+            sin(theta(0)), cos(theta(0)), 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1; // l_hip_y
 
@@ -607,8 +555,8 @@ private:
             sin(theta(1)), cos(theta(1)), 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1; // l_hip_r
-        joint_T_3 << cos(theta(0)), -sin(theta(0)), 0, 0,
-            sin(theta(0)), cos(theta(0)), 0, 0,
+        joint_T_3 << cos(theta(2)), -sin(theta(2)), 0, 0,
+            sin(theta(2)), cos(theta(2)), 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1; // l_hip_p
         joint_T_4 << cos(theta(3)), -sin(theta(3)), 0, 0,
@@ -616,13 +564,13 @@ private:
             0, 0, 1, 0,
             0, 0, 0, 1; // l_knee_p
 
-        joint_T_5 << cos(theta(5)), -sin(theta(5)), 0, 0,
-            sin(theta(5)), cos(theta(5)), 0, 0,
+        joint_T_5 << cos(theta(4)), -sin(theta(4)), 0, 0,
+            sin(theta(4)), cos(theta(4)), 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1; // l_ankle_r
 
-        joint_T_6 << cos(theta(4)), -sin(theta(4)), 0, 0,
-            sin(theta(4)), cos(theta(4)), 0, 0,
+        joint_T_6 << cos(theta(5)), -sin(theta(5)), 0, 0,
+            sin(theta(5)), cos(theta(5)), 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1; // l_ankle_p
 
@@ -633,7 +581,6 @@ private:
         Eigen::Matrix4d adjacent_T_5 = offset_joint_4_T_5 * joint_T_5;
         Eigen::Matrix4d adjacent_T_6 = offset_joint_5_T_6 * joint_T_6;
         Eigen::Matrix4d adjacent_T_7 = offset_joint_6_T_7;
-
         T_goal = T_goal * adjacent_T_1 * adjacent_T_2 * adjacent_T_3 * adjacent_T_4 * adjacent_T_5 * adjacent_T_6 * adjacent_T_7;
         Eigen::VectorXd result(6);
 
@@ -652,6 +599,55 @@ private:
         result[5] = yaw;
 
         return result;
+    }
+
+    Eigen::MatrixXd CalcBodyJacobian()
+    {
+        UpdateForwardKinematics();
+
+        int num_joint = body_jacobian->numjoint_; // Example number of->bodies
+        for (int i = 1; i <= num_joint; i++)
+        {
+            body_jacobian->bodies[i].adjacent_transfom_matrix = model_frame_matrix[i - 1];
+            body_jacobian->bodies[i].joint_matrix_e << 0, 0, 0, 0, 0, 1; // revolute joint
+            // body_jacobian->bodies[i].E << 0, 0, 1, 0, 0, 0; //transepose
+            // if (i == num_joint)
+            // {
+            //     body_jacobian->bodies[i].theta = 0;
+            //     body_jacobian->bodies[i].theta_dot = 0;
+            // }
+            // else
+            // {
+            //     body_jacobian->bodies[i].theta = joint_positions[i - 1];
+            //     body_jacobian->bodies[i].theta_dot = joint_velocities[i - 1];
+            // }
+        }
+        body_jacobian->bodies[0].theta = 0;
+        body_jacobian->bodies[0].theta_dot = 0;
+        body_jacobian->bodies[1].theta = joint_positions[joint_name_to_number["l_hip_y"]];
+        body_jacobian->bodies[1].theta_dot = joint_velocities[joint_name_to_number["l_hip_y"]];
+        body_jacobian->bodies[2].theta = joint_positions[joint_name_to_number["l_hip_r"]];
+        body_jacobian->bodies[2].theta_dot = joint_velocities[joint_name_to_number["l_hip_r"]];
+        body_jacobian->bodies[3].theta = joint_positions[joint_name_to_number["l_hip_p"]];
+        body_jacobian->bodies[3].theta_dot = joint_velocities[joint_name_to_number["l_hip_p"]];
+        body_jacobian->bodies[4].theta = joint_positions[joint_name_to_number["l_knee_p"]];
+        body_jacobian->bodies[4].theta_dot = joint_velocities[joint_name_to_number["l_knee_p"]];
+        body_jacobian->bodies[5].theta = joint_positions[joint_name_to_number["l_ankle_r"]];
+        body_jacobian->bodies[5].theta_dot = joint_velocities[joint_name_to_number["l_ankle_r"]];
+        body_jacobian->bodies[6].theta = joint_positions[joint_name_to_number["l_ankle_p"]];
+        body_jacobian->bodies[6].theta_dot = joint_velocities[joint_name_to_number["l_ankle_p"]];
+        body_jacobian->bodies[7].theta = 0;
+        body_jacobian->bodies[7].theta_dot = 0;
+        for (int i = 1; i <= num_joint; ++i)
+        {
+            body_jacobian->bodies[i].select_joint_number_matrix(i - 1, 0) = 1;
+        }
+        body_jacobian->PropagateKinematics();
+
+        endpoint_pos = model_frame_matrix[0] * model_frame_matrix[1] * model_frame_matrix[2] * model_frame_matrix[3] * model_frame_matrix[5] * model_frame_matrix[6];
+        endpoint_vel = body_jacobian->bodies[body_jacobian->numjoint_].current_body_velocity;
+        endpoint_acc = body_jacobian->bodies[body_jacobian->numjoint_].current_body_acceleration;
+        return body_jacobian->bodies[body_jacobian->numjoint_].jacobian_matrix;
     }
 
     Eigen::MatrixXd ComputeJacobian(std::function<Eigen::VectorXd(Eigen::VectorXd)> func, const Eigen::VectorXd &theta)
@@ -709,14 +705,15 @@ private:
 
     void UpdateBodyTwistData()
     {
-        body_twist[0] = e_offset[0] * joint_velocities[joint_name_to_number["l_hip_y"]];
+        body_twist[0] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[0]) * e_offset[0] * joint_velocities[joint_name_to_number["l_hip_y"]];
         body_twist[1] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[1]) * body_twist[0] + e_offset[1] * joint_velocities[joint_name_to_number["l_hip_r"]];
         body_twist[2] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[2]) * body_twist[1] + e_offset[2] * joint_velocities[joint_name_to_number["l_hip_p"]];
         body_twist[3] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[3]) * body_twist[2] + e_offset[3] * joint_velocities[joint_name_to_number["l_knee_p"]];
         body_twist[4] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[4]) * body_twist[3] + e_offset[4] * joint_velocities[joint_name_to_number["l_ankle_p"]];
         body_twist[5] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[5]) * body_twist[4] + e_offset[5] * joint_velocities[joint_name_to_number["l_ankle_r"]];
+        body_twist[6] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[6]) * body_twist[5];
 
-        body_twist_dot[0] = e_offset[0] * joint_acceleration[joint_name_to_number["l_hip_y"]];
+        body_twist_dot[0] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[0]) * e_offset[0] * joint_acceleration[joint_name_to_number["l_hip_y"]];
         body_twist_dot[1] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[1]) * body_twist_dot[0] + e_offset[0] * joint_acceleration[joint_name_to_number["l_hip_r"]] -
                             liegroup::LieAlgebra::AdOperator(e_offset[0] * joint_velocities[joint_name_to_number["l_hip_y"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[1]) * body_twist[0];
 
@@ -731,6 +728,8 @@ private:
 
         body_twist_dot[5] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[5]) * body_twist_dot[4] + e_offset[5] * joint_acceleration[joint_name_to_number["l_ankle_r"]] -
                             liegroup::LieAlgebra::AdOperator(e_offset[4] * joint_velocities[joint_name_to_number["l_ankle_p"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[5]) * body_twist[4];
+
+        body_twist_dot[6] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[6]) * body_twist_dot[5];
     }
 
     void UpdateBaisMatrix()
@@ -767,39 +766,13 @@ private:
         Eigen::VectorXd f_6(6);
 
         f_1 = body_inertia_matrix[0] * (body_twist_dot[0] + gravity) + bais_matrix[0] * body_twist[0];
-        f_2 = body_inertia_matrix[1] * (body_twist_dot[1] + gravity)+ bais_matrix[1] * body_twist[1];
-        f_3 = body_inertia_matrix[2] * (body_twist_dot[2] + gravity)+ bais_matrix[2] * body_twist[2];
-        f_4 = body_inertia_matrix[3] * (body_twist_dot[3] + gravity)+ bais_matrix[3] * body_twist[3];
-        f_5 = body_inertia_matrix[4] * (body_twist_dot[4] + gravity)+ bais_matrix[4] * body_twist[4];
-        f_6 = body_inertia_matrix[5] * (body_twist_dot[5] + gravity)+ bais_matrix[5] * body_twist[5];
+        f_2 = body_inertia_matrix[1] * (body_twist_dot[1] + gravity) + bais_matrix[1] * body_twist[1];
+        f_3 = body_inertia_matrix[2] * (body_twist_dot[2] + gravity) + bais_matrix[2] * body_twist[2];
+        f_4 = body_inertia_matrix[3] * (body_twist_dot[3] + gravity) + bais_matrix[3] * body_twist[3];
+        f_5 = body_inertia_matrix[4] * (body_twist_dot[4] + gravity) + bais_matrix[4] * body_twist[4];
+        f_6 = body_inertia_matrix[5] * (body_twist_dot[5] + gravity) + bais_matrix[5] * body_twist[5];
 
         Eigen::VectorXd gravity_matrix(6);
-        // gravity_matrix(0) = e_offset[0].transpose() * (body_masses[1] * gravity +
-        //                                                liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[1]) * body_masses[2] * gravity +
-        //                                                liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[1] * model_frame_matrix[2]) * body_masses[3] * gravity +
-        //                                                liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[1] * model_frame_matrix[2] * model_frame_matrix[3]) * body_masses[4] * gravity +
-        //                                                liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[1] * model_frame_matrix[2] * model_frame_matrix[3] * model_frame_matrix[4]) * body_masses[5] * gravity +
-        //                                                liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[1] * model_frame_matrix[2] * model_frame_matrix[3] * model_frame_matrix[4] * model_frame_matrix[5]) * body_masses[6] * gravity);
-
-        // gravity_matrix(1) = e_offset[1].transpose() * (body_masses[2] * gravity +
-        //                                                liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[2]) * body_masses[3] * gravity +
-        //                                                liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[2] * model_frame_matrix[3]) * body_masses[4] * gravity +
-        //                                                liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[2] * model_frame_matrix[3] * model_frame_matrix[4]) * body_masses[5] * gravity +
-        //                                                liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[2] * model_frame_matrix[3] * model_frame_matrix[4] * model_frame_matrix[5]) * body_masses[6] * gravity);
-
-        // gravity_matrix(2) = e_offset[2].transpose() * (body_masses[3] * gravity +
-        //                                                liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[3]) * body_masses[4] * gravity +
-        //                                                liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[3] * model_frame_matrix[4]) * body_masses[5] * gravity +
-        //                                                liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[3] * model_frame_matrix[4] * model_frame_matrix[5]) * body_masses[6] * gravity);
-
-        // gravity_matrix(3) = e_offset[3].transpose() * (body_masses[4] * gravity +
-        //                                                liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[4]) * body_masses[5] * gravity +
-        //                                                liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[4] * model_frame_matrix[5]) * body_masses[6] * gravity);
-
-        // gravity_matrix(4) = e_offset[4].transpose() * (body_masses[5] * gravity +
-        //                                                liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[5]) * body_masses[6] * gravity);
-
-        // gravity_matrix(5) = e_offset[5].transpose() * (body_masses[6] * gravity);
         gravity_matrix(0) = e_offset[0].transpose() * (f_1 +
                                                        liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[1]) * f_2 +
                                                        liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[1] * model_frame_matrix[2]) * f_3 +
@@ -986,6 +959,8 @@ private:
             return J.transpose() * (J * J.transpose() + epsilon * Eigen::MatrixXd::Identity(m, m)).inverse();
         }
     }
+
+    liegroup::IncrementalJacobian *body_jacobian;
 
     rclcpp::Subscription<JointStates>::SharedPtr joint_subscriber_;
     rclcpp::Publisher<JointStates>::SharedPtr joint_publisher_;
