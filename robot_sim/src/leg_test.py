@@ -19,7 +19,7 @@ pos = {
     "l_hip_y": 0,
     "l_hip_r": 0,
     "l_hip_p": 0,
-    "l_knee_p": 0,
+    "l_knee_p": 0.1,
     "l_ankle_r": 0,
     "l_ankle_p": 0,
 }

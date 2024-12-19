@@ -151,13 +151,13 @@ public:
         Eigen::VectorXd e_offset_6(6);
         e_offset_6 << inertia_offset_6(0, 3), inertia_offset_6(1, 3), inertia_offset_6(2, 3), 0, 0, 1;
         e_offset = {e_offset_1, e_offset_2, e_offset_3, e_offset_4, e_offset_5, e_offset_6};
-        for (int i = 0; i < 6; ++i)
+        for (int i = 0; i < 7; ++i)
         {
             Eigen::VectorXd twist = Eigen::VectorXd::Zero(6); // 6x1 영 벡터
             body_twist.push_back(twist);
         }
 
-        for (int i = 0; i < 6; ++i)
+        for (int i = 0; i < 7; ++i)
         {
             Eigen::VectorXd twist = Eigen::VectorXd::Zero(6); // 6x1 영 벡터
             body_twist_dot.push_back(twist);
@@ -172,8 +172,8 @@ public:
         }
 
         trajectory_ = liegroup::FifthOrderPolynomialTrajectory(
-            0.0, -0.6, 0.0, 0.0, // 초기 시간, 위치, 속도, 가속도
-            1.0, -0.3, 0.0, 0.0  // 최종 시간, 위치, 속도, 가속도
+            0.0, -0.81, 0.0, 0.0, // 초기 시간, 위치, 속도, 가속도
+            2.0, -0.4, 0.0, 0.0   // 최종 시간, 위치, 속도, 가속도
         );
     }
 
@@ -217,12 +217,12 @@ private:
         Eigen::VectorXd curr_theta_dot(joint_positions.size());
         Eigen::VectorXd des_theta_dot(joint_positions.size());
         Eigen::VectorXd torque(joint_positions.size());
-        for (size_t i = 0; i < joint_positions.size(); ++i)
+        for (size_t i = 0; i < joint_names.size(); ++i)
         {
-            curr_theta(i) = joint_positions[i];
-            des_theta(i) = joint_positions[i];
-
-            curr_theta_dot(i) = joint_velocities[i];
+            const std::string &joint_name = joint_names[i];
+            curr_theta[i] = joint_positions[joint_name_to_number[joint_name]];
+            des_theta[i] = joint_positions[joint_name_to_number[joint_name]];
+            curr_theta_dot[i] = joint_velocities[joint_name_to_number[joint_name]];
             des_theta_dot(i) = 0;
             torque(i) = 0;
         }
@@ -231,8 +231,8 @@ private:
 
         Eigen::VectorXd theta_min(6); // 최소 각도 제한
         Eigen::VectorXd theta_max(6); // 최대 각도 제한
-        theta_min << -3.14, -3.14, -3.14, -3.14, -3.14, -3.14;
-        theta_max << 3.14, 3.14, 3.14, 3.14, 3.14, 3.14;
+        theta_min << -1.57, -3.14, -3.14, 0, -3.14, -3.14;
+        theta_max << 1.57, 3.14, 3.14, 3.14, 3.14, 3.14;
 
         // Eigen::VectorXd current_pose = ForwardKinematics(curr_theta);
         // std::cout << ComputeMassMatrix() << std::endl;
@@ -321,11 +321,11 @@ private:
 
         Eigen::VectorXd des_acc(6);
         des_acc << 0.0, 0.0, z_acceleration, 0, 0, 0;
-        ref_theta_ddot = J.inverse() * (des_acc- J_dot * des_theta_dot);
+        ref_theta_ddot = J.inverse() * (des_acc - J_dot * des_theta_dot);
 
         Eigen::VectorXd Kp(6), Kv(6);
         Kp << 1000, 1000, 2000, 2000, 1000000, 1000000; // 예: 큰 값의 P게인
-        Kv << 100, 100, 100, 100, 100, 100;       // 예: D게인
+        Kv << 100, 100, 100, 100, 100, 100;             // 예: D게인
         Eigen::VectorXd e = des_theta - curr_theta;
         Eigen::VectorXd dot_e = des_theta_dot - curr_theta_dot;
 
@@ -333,11 +333,13 @@ private:
         des_theta_ddot = ref_theta_ddot + Kv.asDiagonal() * dot_e + Kp.asDiagonal() * e;
         // torque = mass_matrix * des_theta_ddot + corioli_matrix * des_theta_dot + gravity_matrix;
         // torque = mass_matrix * des_theta_ddot + corioli_matrix * curr_theta_dot + gravity_matrix;
-        torque = mass_matrix * des_theta_ddot + corioli_matrix * curr_theta_dot;
-        // torque = gravity_matrix;
+        // torque = mass_matrix * des_theta_ddot + corioli_matrix * curr_theta_dot;
+        torque = gravity_matrix;
 
         // std::cout << "-----------------" << std::endl;
         // std::cout << torque << std::endl;
+        // std::cout << "-----------------" << std::endl;
+        // std::cout << std::fixed << std::setprecision(3) << body_twist[6] << std::endl;
 
         // auto end_time_calc = std::chrono::steady_clock::now();
         // auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time_calc - start_time_calc).count();
@@ -356,16 +358,25 @@ private:
         }
         joint_publisher_->publish(joint_state_msg);
 
+        // auto joint_state_msg = sensor_msgs::msg::JointState();
+        // joint_state_msg.header.stamp = this->now();
+        // for (const auto &joint_name : joint_names)
+        // {
+        //     joint_state_msg.name.push_back(joint_name);
+        //     joint_state_msg.position.push_back(des_theta_dot[joint_name_to_number[joint_name]] + curr_theta[joint_name_to_number[joint_name]]);
+        // }
+        // joint_publisher_->publish(joint_state_msg);
+
         // 궤적이 끝에 도달했는지 확인하고 반전
         if (current_time >= trajectory_.final_time_)
         {
             reverse_ = !reverse_;
             // double initial_time = reverse_ ? 5.0 : 0.0;
             // double final_time = reverse_ ? 0.0 : 5.0;
-            double initial_pos = reverse_ ? -0.3 : -0.6;
-            double final_pos = reverse_ ? -0.6 : -0.3;
+            double initial_pos = reverse_ ? -0.4 : -0.81;
+            double final_pos = reverse_ ? -0.81 : -0.4;
             double initial_time = 0.0;
-            double final_time = 1.0;
+            double final_time = 2.0;
 
             trajectory_.ChangeTrajectory(
                 initial_time, initial_pos, 0.0, 0.0,
@@ -406,8 +417,8 @@ private:
 
         for (int i = 0; i < n; ++i)
         {
-            l[i] = liegroup::Clamp(theta_min[i] - theta_current[i], -1.0, 1.0); // 각도 제한 하한
-            u[i] = liegroup::Clamp(theta_max[i] - theta_current[i], -1.0, 1.0); // 각도 제한 상한
+            l[i] = liegroup::Clamp(theta_min[i] - theta_current[i], -2.0, 2.0); // 각도 제한 하한
+            u[i] = liegroup::Clamp(theta_max[i] - theta_current[i], -2.0, 2.0); // 각도 제한 상한
         }
 
         // CSC 포맷으로 변환
@@ -656,7 +667,6 @@ private:
         Eigen::Matrix4d adjacent_T_5 = offset_joint_4_T_5 * joint_T_5;
         Eigen::Matrix4d adjacent_T_6 = offset_joint_5_T_6 * joint_T_6;
         Eigen::Matrix4d adjacent_T_7 = offset_joint_6_T_7;
-
         T_goal = T_goal * adjacent_T_1 * adjacent_T_2 * adjacent_T_3 * adjacent_T_4 * adjacent_T_5 * adjacent_T_6 * adjacent_T_7;
         Eigen::VectorXd result(6);
 
@@ -732,28 +742,33 @@ private:
 
     void UpdateBodyTwistData()
     {
-        body_twist[0] = e_offset[0] * joint_velocities[joint_name_to_number["l_hip_y"]];
-        body_twist[1] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[1]) * body_twist[0] + e_offset[1] * joint_velocities[joint_name_to_number["l_hip_r"]];
-        body_twist[2] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[2]) * body_twist[1] + e_offset[2] * joint_velocities[joint_name_to_number["l_hip_p"]];
-        body_twist[3] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[3]) * body_twist[2] + e_offset[3] * joint_velocities[joint_name_to_number["l_knee_p"]];
-        body_twist[4] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[4]) * body_twist[3] + e_offset[4] * joint_velocities[joint_name_to_number["l_ankle_p"]];
-        body_twist[5] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[5]) * body_twist[4] + e_offset[5] * joint_velocities[joint_name_to_number["l_ankle_r"]];
+        Eigen::VectorXd select_z_joint(6);
+        select_z_joint << 0, 0, 0, 0, 0, 1;
+        body_twist[0] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[0]) * select_z_joint * joint_velocities[joint_name_to_number["l_hip_y"]];
+        body_twist[1] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[1]) * body_twist[0] + select_z_joint * joint_velocities[joint_name_to_number["l_hip_r"]];
+        body_twist[2] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[2]) * body_twist[1] + select_z_joint * joint_velocities[joint_name_to_number["l_hip_p"]];
+        body_twist[3] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[3]) * body_twist[2] + select_z_joint * joint_velocities[joint_name_to_number["l_knee_p"]];
+        body_twist[4] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[4]) * body_twist[3] + select_z_joint * joint_velocities[joint_name_to_number["l_ankle_r"]];
+        body_twist[5] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[5]) * body_twist[4] + select_z_joint * joint_velocities[joint_name_to_number["l_ankle_p"]];
+        body_twist[6] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[6]) * body_twist[5];
 
-        body_twist_dot[0] = e_offset[0] * joint_acceleration[joint_name_to_number["l_hip_y"]];
-        body_twist_dot[1] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[1]) * body_twist_dot[0] + e_offset[0] * joint_acceleration[joint_name_to_number["l_hip_r"]] -
-                            liegroup::LieAlgebra::AdOperator(e_offset[0] * joint_velocities[joint_name_to_number["l_hip_y"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[1]) * body_twist[0];
+        body_twist_dot[0] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[0]) * select_z_joint * joint_acceleration[joint_name_to_number["l_hip_y"]];
+        body_twist_dot[1] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[1]) * body_twist_dot[0] + select_z_joint * joint_acceleration[joint_name_to_number["l_hip_r"]] -
+                            liegroup::LieAlgebra::AdOperator(select_z_joint * joint_velocities[joint_name_to_number["l_hip_y"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[1]) * body_twist[0];
 
-        body_twist_dot[2] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[2]) * body_twist_dot[1] + e_offset[2] * joint_acceleration[joint_name_to_number["l_hip_p"]] -
-                            liegroup::LieAlgebra::AdOperator(e_offset[1] * joint_velocities[joint_name_to_number["l_hip_r"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[2]) * body_twist[1];
+        body_twist_dot[2] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[2]) * body_twist_dot[1] + select_z_joint * joint_acceleration[joint_name_to_number["l_hip_p"]] -
+                            liegroup::LieAlgebra::AdOperator(select_z_joint * joint_velocities[joint_name_to_number["l_hip_r"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[2]) * body_twist[1];
 
-        body_twist_dot[3] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[3]) * body_twist_dot[2] + e_offset[3] * joint_acceleration[joint_name_to_number["l_knee_p"]] -
-                            liegroup::LieAlgebra::AdOperator(e_offset[2] * joint_velocities[joint_name_to_number["l_hip_p"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[3]) * body_twist[2];
+        body_twist_dot[3] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[3]) * body_twist_dot[2] + select_z_joint * joint_acceleration[joint_name_to_number["l_knee_p"]] -
+                            liegroup::LieAlgebra::AdOperator(select_z_joint * joint_velocities[joint_name_to_number["l_hip_p"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[3]) * body_twist[2];
 
-        body_twist_dot[4] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[4]) * body_twist_dot[3] + e_offset[4] * joint_acceleration[joint_name_to_number["l_ankle_p"]] -
-                            liegroup::LieAlgebra::AdOperator(e_offset[3] * joint_velocities[joint_name_to_number["l_knee_p"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[4]) * body_twist[3];
+        body_twist_dot[4] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[4]) * body_twist_dot[3] + select_z_joint * joint_acceleration[joint_name_to_number["l_ankle_p"]] -
+                            liegroup::LieAlgebra::AdOperator(select_z_joint * joint_velocities[joint_name_to_number["l_knee_p"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[4]) * body_twist[3];
 
-        body_twist_dot[5] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[5]) * body_twist_dot[4] + e_offset[5] * joint_acceleration[joint_name_to_number["l_ankle_r"]] -
-                            liegroup::LieAlgebra::AdOperator(e_offset[4] * joint_velocities[joint_name_to_number["l_ankle_p"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[5]) * body_twist[4];
+        body_twist_dot[5] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[5]) * body_twist_dot[4] + select_z_joint * joint_acceleration[joint_name_to_number["l_ankle_r"]] -
+                            liegroup::LieAlgebra::AdOperator(select_z_joint * joint_velocities[joint_name_to_number["l_ankle_p"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[5]) * body_twist[4];
+
+        body_twist_dot[6] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[6]) * body_twist_dot[5];
     }
 
     void UpdateBaisMatrix()
@@ -779,8 +794,12 @@ private:
     }
     Eigen::VectorXd ComputeGravityMatrix()
     {
-        Eigen::VectorXd gravity(6);         // 크기를 6으로 설정
-        gravity << 0, 0, -9.80665, 0, 0, 0; // 각 원소에 값 설정
+        Eigen::VectorXd gravity_x(6);
+        Eigen::VectorXd gravity_y(6);
+        Eigen::VectorXd gravity_z(6);
+        gravity_x << -9.81, 0, 0, 0, 0, 0; // 각 원소에 값 설정
+        gravity_y << 0, -9.81, 0, 0, 0, 0; // 각 원소에 값 설정
+        gravity_z << 0, 0, -9.81, 0, 0, 0;  // 각 원소에 값 설정
 
         Eigen::VectorXd f_1(6);
         Eigen::VectorXd f_2(6);
@@ -789,14 +808,30 @@ private:
         Eigen::VectorXd f_5(6);
         Eigen::VectorXd f_6(6);
 
-        f_1 = body_inertia_matrix[0] * (body_twist_dot[0] + gravity) + bais_matrix[0] * body_twist[0];
-        f_2 = body_inertia_matrix[1] * (body_twist_dot[1] + gravity) + bais_matrix[1] * body_twist[1];
-        f_3 = body_inertia_matrix[2] * (body_twist_dot[2] + gravity) + bais_matrix[2] * body_twist[2];
-        f_4 = body_inertia_matrix[3] * (body_twist_dot[3] + gravity) + bais_matrix[3] * body_twist[3];
-        f_5 = body_inertia_matrix[4] * (body_twist_dot[4] + gravity) + bais_matrix[4] * body_twist[4];
-        f_6 = body_inertia_matrix[5] * (body_twist_dot[5] + gravity) + bais_matrix[5] * body_twist[5];
+        // f_1 = body_inertia_matrix[0] * (body_twist_dot[0]) + bais_matrix[0] * body_twist[0];
+        // f_2 = body_inertia_matrix[1] * (body_twist_dot[1]) + bais_matrix[1] * body_twist[1];
+        // f_3 = body_inertia_matrix[2] * (body_twist_dot[2]) + bais_matrix[2] * body_twist[2];
+        // f_4 = body_inertia_matrix[3] * (body_twist_dot[3]) + bais_matrix[3] * body_twist[3];
+        // f_5 = body_inertia_matrix[4] * (body_twist_dot[4]) + bais_matrix[4] * body_twist[4];
+        // f_6 = body_inertia_matrix[5] * (body_twist_dot[5]) + bais_matrix[5] * body_twist[5];
+
+        f_1 = body_masses[1] * gravity_y;
+        f_2 = body_masses[2] * gravity_y * -1;
+        f_3 = body_masses[3] * gravity_y * -1;
+        f_4 = body_masses[4] * gravity_y;
+        f_5 = body_masses[5] * gravity_y* -1;
+        f_6 = body_masses[6] * gravity_z;
+
+        // f_1 = body_masses[1] * gravity_z;
+        // f_2 = body_masses[2] * gravity_z;
+        // f_3 = body_masses[3] * gravity_z;
+        // f_4 = body_masses[4] * gravity_z;
+        // f_5 = body_masses[5] * gravity_z;
+        // f_6 = body_masses[6] * gravity_z;
 
         Eigen::VectorXd gravity_matrix(6);
+        // Eigen::VectorXd select_z_joint(6);
+        // select_z_joint << 0, 0, 1, 0, 0, 0;
         // gravity_matrix(0) = e_offset[0].transpose() * (body_masses[1] * gravity +
         //                                                liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[1]) * body_masses[2] * gravity +
         //                                                liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[1] * model_frame_matrix[2]) * body_masses[3] * gravity +
@@ -824,31 +859,38 @@ private:
 
         // gravity_matrix(5) = e_offset[5].transpose() * (body_masses[6] * gravity);
         gravity_matrix(0) = e_offset[0].transpose() * (f_1 +
-                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[1]) * f_2 +
-                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[1] * model_frame_matrix[2]) * f_3 +
-                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[1] * model_frame_matrix[2] * model_frame_matrix[3]) * f_4 +
-                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[1] * model_frame_matrix[2] * model_frame_matrix[3] * model_frame_matrix[4]) * f_5 +
-                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[1] * model_frame_matrix[2] * model_frame_matrix[3] * model_frame_matrix[4] * model_frame_matrix[5]) * f_6);
+                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[0]) * f_2 +
+                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[0] * model_frame_matrix[1]) * f_3 +
+                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[0] * model_frame_matrix[1] * model_frame_matrix[2]) * f_4 +
+                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[0] * model_frame_matrix[1] * model_frame_matrix[2] * model_frame_matrix[3]) * f_5 +
+                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[0] * model_frame_matrix[1] * model_frame_matrix[2] * model_frame_matrix[3] * model_frame_matrix[4]) * f_6);
 
         gravity_matrix(1) = e_offset[1].transpose() * (f_2 +
-                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[2]) * f_3 +
-                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[2] * model_frame_matrix[3]) * f_4 +
-                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[2] * model_frame_matrix[3] * model_frame_matrix[4]) * f_5 +
-                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[2] * model_frame_matrix[3] * model_frame_matrix[4] * model_frame_matrix[5]) * f_6);
+                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[1]) * f_3 +
+                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[1] * model_frame_matrix[2]) * f_4 +
+                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[1] * model_frame_matrix[2] * model_frame_matrix[3]) * f_5 +
+                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[1] * model_frame_matrix[2] * model_frame_matrix[3] * model_frame_matrix[4]) * f_6);
 
         gravity_matrix(2) = e_offset[2].transpose() * (f_3 +
-                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[3]) * f_4 +
-                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[3] * model_frame_matrix[4]) * f_5 +
-                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[3] * model_frame_matrix[4] * model_frame_matrix[5]) * f_6);
+                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[2]) * f_4 +
+                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[2] * model_frame_matrix[3]) * f_5 +
+                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[2] * model_frame_matrix[3] * model_frame_matrix[4]) * f_6);
 
         gravity_matrix(3) = e_offset[3].transpose() * (f_4 +
-                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[4]) * f_5 +
-                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[4] * model_frame_matrix[5]) * f_6);
+                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[5]) * f_5 +
+                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[5] * model_frame_matrix[6]) * f_6);
 
         gravity_matrix(4) = e_offset[4].transpose() * (f_5 +
-                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[5]) * f_6);
+                                                       liegroup::LieAlgebra::AdjointTransformInverseTranspose(model_frame_matrix[6]) * f_6);
 
-        gravity_matrix(5) = e_offset[5].transpose() * (f_6);
+        gravity_matrix(5) = e_offset[5].transpose() * (f_6); 
+
+        // gravity_matrix(5) = select_z_joint.transpose() * (f_6);
+        // gravity_matrix(4) = select_z_joint.transpose() * (f_5) + gravity_matrix(5) ;
+        // gravity_matrix(3) = select_z_joint.transpose() * (f_4)+ gravity_matrix(4) ;
+        // gravity_matrix(2) = select_z_joint.transpose() * (f_3)+ gravity_matrix(3) ;
+        // gravity_matrix(1) = select_z_joint.transpose() * (f_2)+ gravity_matrix(2) ;
+        // gravity_matrix(0) = select_z_joint.transpose() * (f_1)+ gravity_matrix(1) ;
         return gravity_matrix;
     }
 

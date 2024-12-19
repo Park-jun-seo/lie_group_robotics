@@ -174,8 +174,8 @@ public:
         }
 
         trajectory_ = liegroup::FifthOrderPolynomialTrajectory(
-            0.0, -0.6, 0.0, 0.0, // 초기 시간, 위치, 속도, 가속도
-            1.0, -0.3, 0.0, 0.0  // 최종 시간, 위치, 속도, 가속도
+            0.0, -0.81, 0.0, 0.0, // 초기 시간, 위치, 속도, 가속도
+            2.0, -0.4, 0.0, 0.0  // 최종 시간, 위치, 속도, 가속도
         );
     }
 
@@ -229,7 +229,7 @@ private:
             torque(i) = 0;
         }
 
-        const double tolerance = 1e-4; // 원하는 위치 오차 임계값 설정
+        const double tolerance = 1e-6; // 원하는 위치 오차 임계값 설정
 
         Eigen::VectorXd theta_min(6); // 최소 각도 제한
         Eigen::VectorXd theta_max(6); // 최대 각도 제한
@@ -264,7 +264,7 @@ private:
         {
             return;
         }
-        auto start_time_calc = std::chrono::steady_clock::now();
+        // auto start_time_calc = std::chrono::steady_clock::now();
 
         // Eigen::MatrixXd J = ComputeJacobian([this](const Eigen::VectorXd &theta)
         //                                     { return ForwardKinematics(theta); }, curr_theta);
@@ -273,6 +273,9 @@ private:
         // std::cout << "1---------------" << std::endl;
         // std::cout << std::fixed << std::setprecision(3) << JB << std::endl;
         Eigen::MatrixXd JB_reduced = JB.block(0, 0, JB.rows(), JB.cols() - 1);
+        UpdateBodyTwistData();
+        std::cout << "1---------------" << std::endl;
+        std::cout << std::fixed << std::setprecision(3) << body_twist[6] << std::endl;
 
         // for (int i = 1; i <=body_jacobian->numjoint_; i++)
         // {
@@ -290,12 +293,12 @@ private:
 
         SolveOptimization(JB_reduced, delta_p, des_theta_dot, curr_theta, theta_min, theta_max);
         // std::cout << des_theta_dot << std::endl;
-        auto end_time_calc = std::chrono::steady_clock::now();
-        auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time_calc - start_time_calc).count();
-        double duration_ms = static_cast<double>(duration_ns) / 1e6; // 나노초를 밀리초로 변환
+        // auto end_time_calc = std::chrono::steady_clock::now();
+        // auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time_calc - start_time_calc).count();
+        // double duration_ms = static_cast<double>(duration_ns) / 1e6; // 나노초를 밀리초로 변환
 
         // 걸린 시간 출력
-        std::cout << "While 문이 반복을 완료하는데 걸린 시간: " << duration_ms << " ms" << std::endl;
+        // std::cout << "While 문이 반복을 완료하는데 걸린 시간: " << duration_ms << " ms" << std::endl;
 
         des_theta = curr_theta + des_theta_dot;
 
@@ -314,10 +317,10 @@ private:
             reverse_ = !reverse_;
             // double initial_time = reverse_ ? 5.0 : 0.0;
             // double final_time = reverse_ ? 0.0 : 5.0;
-            double initial_pos = reverse_ ? -0.3 : -0.6;
-            double final_pos = reverse_ ? -0.6 : -0.3;
+            double initial_pos = reverse_ ? -0.4 : -0.81;
+            double final_pos = reverse_ ? -0.81 : -0.4;
             double initial_time = 0.0;
-            double final_time = 1.0;
+            double final_time = 2.0;
 
             trajectory_.ChangeTrajectory(
                 initial_time, initial_pos, 0.0, 0.0,
@@ -732,29 +735,31 @@ private:
 
     void UpdateBodyTwistData()
     {
-        body_twist[0] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[0]) * e_offset[0] * joint_velocities[joint_name_to_number["l_hip_y"]];
-        body_twist[1] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[1]) * body_twist[0] + e_offset[1] * joint_velocities[joint_name_to_number["l_hip_r"]];
-        body_twist[2] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[2]) * body_twist[1] + e_offset[2] * joint_velocities[joint_name_to_number["l_hip_p"]];
-        body_twist[3] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[3]) * body_twist[2] + e_offset[3] * joint_velocities[joint_name_to_number["l_knee_p"]];
-        body_twist[4] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[4]) * body_twist[3] + e_offset[4] * joint_velocities[joint_name_to_number["l_ankle_p"]];
-        body_twist[5] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[5]) * body_twist[4] + e_offset[5] * joint_velocities[joint_name_to_number["l_ankle_r"]];
+        Eigen::VectorXd select_z_joint(6);
+        select_z_joint << 0,0,0,0,0,1;
+        body_twist[0] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[0]) * select_z_joint * joint_velocities[joint_name_to_number["l_hip_y"]];
+        body_twist[1] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[1]) * body_twist[0] + select_z_joint * joint_velocities[joint_name_to_number["l_hip_r"]];
+        body_twist[2] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[2]) * body_twist[1] + select_z_joint * joint_velocities[joint_name_to_number["l_hip_p"]];
+        body_twist[3] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[3]) * body_twist[2] + select_z_joint * joint_velocities[joint_name_to_number["l_knee_p"]];
+        body_twist[4] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[4]) * body_twist[3] + select_z_joint * joint_velocities[joint_name_to_number["l_ankle_r"]];
+        body_twist[5] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[5]) * body_twist[4] + select_z_joint * joint_velocities[joint_name_to_number["l_ankle_p"]];
         body_twist[6] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[6]) * body_twist[5];
 
-        body_twist_dot[0] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[0]) * e_offset[0] * joint_acceleration[joint_name_to_number["l_hip_y"]];
-        body_twist_dot[1] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[1]) * body_twist_dot[0] + e_offset[0] * joint_acceleration[joint_name_to_number["l_hip_r"]] -
-                            liegroup::LieAlgebra::AdOperator(e_offset[0] * joint_velocities[joint_name_to_number["l_hip_y"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[1]) * body_twist[0];
+        body_twist_dot[0] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[0]) * select_z_joint * joint_acceleration[joint_name_to_number["l_hip_y"]];
+        body_twist_dot[1] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[1]) * body_twist_dot[0] + select_z_joint * joint_acceleration[joint_name_to_number["l_hip_r"]] -
+                            liegroup::LieAlgebra::AdOperator(select_z_joint * joint_velocities[joint_name_to_number["l_hip_y"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[1]) * body_twist[0];
 
-        body_twist_dot[2] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[2]) * body_twist_dot[1] + e_offset[2] * joint_acceleration[joint_name_to_number["l_hip_p"]] -
-                            liegroup::LieAlgebra::AdOperator(e_offset[1] * joint_velocities[joint_name_to_number["l_hip_r"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[2]) * body_twist[1];
+        body_twist_dot[2] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[2]) * body_twist_dot[1] + select_z_joint * joint_acceleration[joint_name_to_number["l_hip_p"]] -
+                            liegroup::LieAlgebra::AdOperator(select_z_joint * joint_velocities[joint_name_to_number["l_hip_r"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[2]) * body_twist[1];
 
-        body_twist_dot[3] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[3]) * body_twist_dot[2] + e_offset[3] * joint_acceleration[joint_name_to_number["l_knee_p"]] -
-                            liegroup::LieAlgebra::AdOperator(e_offset[2] * joint_velocities[joint_name_to_number["l_hip_p"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[3]) * body_twist[2];
+        body_twist_dot[3] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[3]) * body_twist_dot[2] + select_z_joint * joint_acceleration[joint_name_to_number["l_knee_p"]] -
+                            liegroup::LieAlgebra::AdOperator(select_z_joint * joint_velocities[joint_name_to_number["l_hip_p"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[3]) * body_twist[2];
 
-        body_twist_dot[4] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[4]) * body_twist_dot[3] + e_offset[4] * joint_acceleration[joint_name_to_number["l_ankle_p"]] -
-                            liegroup::LieAlgebra::AdOperator(e_offset[3] * joint_velocities[joint_name_to_number["l_knee_p"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[4]) * body_twist[3];
+        body_twist_dot[4] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[4]) * body_twist_dot[3] + select_z_joint * joint_acceleration[joint_name_to_number["l_ankle_p"]] -
+                            liegroup::LieAlgebra::AdOperator(select_z_joint * joint_velocities[joint_name_to_number["l_knee_p"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[4]) * body_twist[3];
 
-        body_twist_dot[5] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[5]) * body_twist_dot[4] + e_offset[5] * joint_acceleration[joint_name_to_number["l_ankle_r"]] -
-                            liegroup::LieAlgebra::AdOperator(e_offset[4] * joint_velocities[joint_name_to_number["l_ankle_p"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[5]) * body_twist[4];
+        body_twist_dot[5] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[5]) * body_twist_dot[4] + select_z_joint * joint_acceleration[joint_name_to_number["l_ankle_r"]] -
+                            liegroup::LieAlgebra::AdOperator(select_z_joint * joint_velocities[joint_name_to_number["l_ankle_p"]]) * liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[5]) * body_twist[4];
 
         body_twist_dot[6] = liegroup::LieAlgebra::InverseAdjoint(model_frame_matrix[6]) * body_twist_dot[5];
     }

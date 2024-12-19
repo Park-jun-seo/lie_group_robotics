@@ -1,6 +1,6 @@
 <mujoco>
     <compiler coordinate="local" angle="degree" meshdir="meshes" strippath="false" />
-    <option timestep="0.004" iterations="40" solver="Newton" tolerance="1e-10" gravity="0 0 0"/>
+    <option timestep="0.004" iterations="40" solver="Newton" tolerance="1e-10"/>
 
     <default>
         <joint armature="0.6" frictionloss="0.03" />
