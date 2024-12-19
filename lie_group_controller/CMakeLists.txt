@@ -50,6 +50,7 @@ add_library(lie_group_controller_lib
   src/exponential_coordinate_relative_jacobian_gradient_descent.cpp
   src/ik_newton_raphson_cmt.cpp
   src/ik_newton_raphson_body_jacobian.cpp
+  src/ik_newton_raphson_body_jacobian_cmt.cpp
 )
 ament_target_dependencies(lie_group_controller_lib ${dependencies})
 target_link_libraries(lie_group_controller_lib
@@ -93,6 +94,10 @@ target_link_libraries(ik_newton_raphson_cmt lie_group_controller_lib)
 add_executable(ik_newton_raphson_body_jacobian src/ik_newton_raphson_body_jacobian.cpp)
 ament_target_dependencies(ik_newton_raphson_body_jacobian ${dependencies})
 target_link_libraries(ik_newton_raphson_body_jacobian lie_group_controller_lib)
+
+add_executable(ik_newton_raphson_body_jacobian_cmt src/ik_newton_raphson_body_jacobian_cmt.cpp)
+ament_target_dependencies(ik_newton_raphson_body_jacobian_cmt ${dependencies})
+target_link_libraries(ik_newton_raphson_body_jacobian_cmt lie_group_controller_lib)
 ################################################################################
 # Install
 ################################################################################
@@ -115,6 +120,7 @@ install(TARGETS
   exponential_coordinate_relative_jacobian_gradient_descent
   ik_newton_raphson_cmt
   ik_newton_raphson_body_jacobian
+  ik_newton_raphson_body_jacobian_cmt
   DESTINATION lib/${PROJECT_NAME}
 )
 

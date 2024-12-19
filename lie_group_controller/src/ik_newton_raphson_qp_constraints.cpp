@@ -1,4 +1,4 @@
-#include "lie_toolbox/incremental_jacobian.hpp"
+#include "lie_toolbox/polynomial_interpolation.hpp"
 #include <sensor_msgs/msg/joint_state.hpp>
 #include "std_msgs/msg/float64_multi_array.hpp"
 #include <geometry_msgs/msg/twist.hpp>
@@ -18,7 +18,7 @@ class LEG : public rclcpp::Node
 {
 public:
     std::vector<std::string> joint_names = {
-        "l_hip_p", "l_hip_r", "l_hip_y", "l_knee_p", "l_ankle_p", "l_ankle_r"};
+        "l_hip_y", "l_hip_r", "l_hip_p", "l_knee_p", "l_ankle_r", "l_ankle_p"};
     // 각 관절 이름에 대한 인덱스를 매핑하는 맵
     std::unordered_map<std::string, int> joint_name_to_number;
 
@@ -76,6 +76,11 @@ public:
 
         // 시작 시간 기록
         start_time_ = this->now();
+
+        trajectory_ = liegroup::FifthOrderPolynomialTrajectory(
+            0.0, -0.6, 0.0, 0.0, // 초기 시간, 위치, 속도, 가속도
+            1.0, -0.3, 0.0, 0.0  // 최종 시간, 위치, 속도, 가속도
+        );
     }
 
 private:
@@ -125,18 +130,17 @@ private:
             theta(i) = joint_positions[i];
         }
 
-        double elapsed_time = (this->now() - start_time_).seconds();
-        double amplitude = 0.1; // 사인파의 진폭 (미터 단위)
-        double frequency = 0.5; // 사인파의 주파수 (Hz)
-        double omega = 2 * M_PI * frequency;
-        double base_z = -0.5; // 기본 z 위치
-        double z = amplitude * sin(omega * elapsed_time) + base_z;
+        double current_time = (this->now() - start_time_).seconds();
 
-        // 원하는 위치와 회전을 설정 (z축만 사인파로 변경)
+        double z_position = trajectory_.GetPosition(current_time);
+        // double z_velocity = trajectory_.GetVelocity(current_time);
+        // double z_acceleration = trajectory_.GetAcceleration(current_time);
+
+        // 목표 위치 벡터 설정
         Eigen::VectorXd p_des(6);
-        p_des << 0.1, 0.0, z, liegroup::DegToRad(5.0), liegroup::DegToRad(20.0), liegroup::DegToRad(40.0);
+        p_des << 0.0, 0.0, z_position, liegroup::DegToRad(0.0), liegroup::DegToRad(0.0), liegroup::DegToRad(0.0);
 
-        auto start_time_calc = std::chrono::high_resolution_clock::now();
+        auto start_time_calc = std::chrono::steady_clock::now();
         Eigen::VectorXd delta_p = p_des - ForwardKinematics(theta);
 
         // 자코비안 계산 (현재 각도 기준)
@@ -146,12 +150,12 @@ private:
         // 최적화 문제 해결 (각속도 계산)
         Eigen::VectorXd theta_dot;
         SolveOptimization(J, delta_p, theta_dot, theta, theta_min, theta_max);
-        auto end_time_calc = std::chrono::high_resolution_clock::now();
-        auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time_calc - start_time_calc).count(); // 나노초 단위
-        double duration_ms = duration_ns / 1e6;                                                                           // 나노초를 밀리초로 변환
+        auto end_time_calc = std::chrono::steady_clock::now();
+        auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time_calc - start_time_calc).count();
+        double duration_ms = static_cast<double>(duration_ns) / 1e6; // 나노초를 밀리초로 변환
 
         // 걸린 시간 출력
-        RCLCPP_INFO(this->get_logger(), "While 문이 반복을 완료하는데 걸린 시간: %.3f ms", duration_ms);
+        std::cout << "While 문이 반복을 완료하는데 걸린 시간: " << duration_ms << " ms" << std::endl;
 
         theta += theta_dot;
 
@@ -174,6 +178,22 @@ private:
         // position_msg.angular.y = current_pose(4);
         // position_msg.angular.z = current_pose(5);
         // position_publisher_->publish(position_msg);
+        // 궤적이 끝에 도달했는지 확인하고 반전
+        if (current_time >= trajectory_.final_time_)
+        {
+            reverse_ = !reverse_;
+            // double initial_time = reverse_ ? 5.0 : 0.0;
+            // double final_time = reverse_ ? 0.0 : 5.0;
+            double initial_pos = reverse_ ? -0.3 : -0.6;
+            double final_pos = reverse_ ? -0.6 : -0.3;
+            double initial_time = 0.0;
+            double final_time = 1.0;
+
+            trajectory_.ChangeTrajectory(
+                initial_time, initial_pos, 0.0, 0.0,
+                final_time, final_pos, 0.0, 0.0);
+            start_time_ = this->now(); // 시작 시간 초기화
+        }
     }
 
     void SolveOptimization(const Eigen::MatrixXd &J, const Eigen::VectorXd &p_dot, Eigen::VectorXd &theta_dot,
@@ -324,8 +344,8 @@ private:
         Eigen::Matrix4d joint_T_6;
 
         //  "l_hip_p", "l_hip_r", "l_hip_y", "l_knee_p", "l_ankle_p", "l_ankle_r"
-        joint_T_1 << cos(theta(2)), -sin(theta(2)), 0, 0,
-            sin(theta(2)), cos(theta(2)), 0, 0,
+        joint_T_1 << cos(theta(0)), -sin(theta(0)), 0, 0,
+            sin(theta(0)), cos(theta(0)), 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1; // l_hip_y
 
@@ -333,8 +353,8 @@ private:
             sin(theta(1)), cos(theta(1)), 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1; // l_hip_r
-        joint_T_3 << cos(theta(0)), -sin(theta(0)), 0, 0,
-            sin(theta(0)), cos(theta(0)), 0, 0,
+        joint_T_3 << cos(theta(2)), -sin(theta(2)), 0, 0,
+            sin(theta(2)), cos(theta(2)), 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1; // l_hip_p
         joint_T_4 << cos(theta(3)), -sin(theta(3)), 0, 0,
@@ -342,13 +362,13 @@ private:
             0, 0, 1, 0,
             0, 0, 0, 1; // l_knee_p
 
-        joint_T_5 << cos(theta(5)), -sin(theta(5)), 0, 0,
-            sin(theta(5)), cos(theta(5)), 0, 0,
+        joint_T_5 << cos(theta(4)), -sin(theta(4)), 0, 0,
+            sin(theta(4)), cos(theta(4)), 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1; // l_ankle_r
 
-        joint_T_6 << cos(theta(4)), -sin(theta(4)), 0, 0,
-            sin(theta(4)), cos(theta(4)), 0, 0,
+        joint_T_6 << cos(theta(5)), -sin(theta(5)), 0, 0,
+            sin(theta(5)), cos(theta(5)), 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1; // l_ankle_p
 
@@ -417,6 +437,7 @@ private:
             return J.transpose() * (J * J.transpose() + epsilon * Eigen::MatrixXd::Identity(m, m)).inverse();
         }
     }
+    liegroup::FifthOrderPolynomialTrajectory trajectory_;
 
     rclcpp::Subscription<JointStates>::SharedPtr joint_subscriber_;
     rclcpp::Publisher<JointStates>::SharedPtr joint_publisher_;
@@ -430,7 +451,7 @@ private:
     Eigen::VectorXd endpoint_acc;
     rclcpp::TimerBase::SharedPtr timer_;
     bool joint_states_received = false;
-
+    bool reverse_ = false;
     rclcpp::Time start_time_;
 };
 

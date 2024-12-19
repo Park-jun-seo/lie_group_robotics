@@ -27,7 +27,7 @@
     <geom name="floor" size="0 0 0.05" type="plane" material="groundplane" friction="0.5"/>
     <light directional="true" diffuse=".8 .8 .8" specular=".2 .2 .2" pos="0 0 5" dir="0 0 -1" />
     <body pos="0 0 1" euler="0 0 0">
-      <include file="parts_mjcf/dummy_6dof_leg.xml"/>
+      <include file="parts_mjcf/dummy_6dof_leg_torque.xml"/>
     </body>
   </worldbody>
   <include file="dummy_physics.xml"/>

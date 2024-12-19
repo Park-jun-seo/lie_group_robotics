@@ -98,7 +98,6 @@ namespace liegroup
          */
         double GetAcceleration() const;
 
-    private:
         double initial_time_; ///< 초기 시간.
         double initial_pos_;  ///< 초기 위치.
 
@@ -110,6 +109,9 @@ namespace liegroup
         double current_vel_;  ///< 현재 속도.
         double current_acc_;  ///< 현재 가속도 (항상 0).
 
+
+    private:
+        
         /**
          * @brief 선형 보간을 위한 속도 계산.
          */
@@ -225,7 +227,6 @@ namespace liegroup
          */
         double GetAcceleration() const;
 
-    private:
         double initial_time_; ///< 초기 시간.
         double initial_pos_;  ///< 초기 위치.
         double initial_vel_;  ///< 초기 속도.
@@ -239,6 +240,8 @@ namespace liegroup
         double current_vel_;  ///< 현재 속도.
         double current_acc_;  ///< 현재 가속도.
 
+    private:
+    
         Eigen::Vector4d coeff_; ///< 3차 다항식 계수 [a3, a2, a1, a0]^T.
 
         /**
@@ -376,7 +379,6 @@ namespace liegroup
          */
         double GetAcceleration() const;
 
-    private:
         double initial_time_; ///< 초기 시간.
         double initial_pos_;  ///< 초기 위치.
         double initial_vel_;  ///< 초기 속도.
@@ -392,6 +394,8 @@ namespace liegroup
         double current_vel_;  ///< 현재 속도.
         double current_acc_;  ///< 현재 가속도.
 
+    private:
+        
         Eigen::VectorXd position_coeff_;     ///< 5차 다항식 위치 계수 [a5, a4, a3, a2, a1, a0]^T.
         Eigen::VectorXd velocity_coeff_;     ///< 4차 다항식 속도 계수 [b4, b3, b2, b1, b0]^T.
         Eigen::VectorXd acceleration_coeff_; ///< 3차 다항식 가속도 계수 [c3, c2, c1, c0]^T.
@@ -554,7 +558,6 @@ namespace liegroup
          */
         double GetJerk() const;
 
-    private:
         double initial_time_; ///< 초기 시간.
         double initial_pos_;  ///< 초기 위치.
         double initial_vel_;  ///< 초기 속도.
@@ -573,6 +576,8 @@ namespace liegroup
         double current_acc_;  ///< 현재 가속도.
         double current_jerk_; ///< 현재 젭.
 
+    private:
+        
         Eigen::VectorXd position_coeff_;     ///< 7차 다항식 위치 계수 [a7, a6, a5, a4, a3, a2, a1, a0]^T.
         Eigen::VectorXd velocity_coeff_;     ///< 6차 다항식 속도 계수 [b6, b5, b4, b3, b2, b1, b0]^T.
         Eigen::VectorXd acceleration_coeff_; ///< 5차 다항식 가속도 계수 [c5, c4, c3, c2, c1, c0]^T.
@@ -757,11 +762,12 @@ namespace liegroup
          */
         double GetSnap() const;
 
-    private:
         double initial_time_, initial_pos_, initial_vel_, initial_acc_, initial_jerk_, initial_snap_;
         double final_time_, final_pos_, final_vel_, final_acc_, final_jerk_, final_snap_;
         double current_time_, current_pos_, current_vel_, current_acc_, current_jerk_, current_snap_;
 
+    private:
+        
         Eigen::VectorXd position_coeff_;     ///< 9차 다항식 위치 계수 [a9, a8, ..., a0]^T.
         Eigen::VectorXd velocity_coeff_;     ///< 8차 다항식 속도 계수 [b8, b7, ..., b0]^T.
         Eigen::VectorXd acceleration_coeff_; ///< 7차 다항식 가속도 계수 [c7, c6, ..., c0]^T.

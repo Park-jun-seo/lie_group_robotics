@@ -1,4 +1,4 @@
-#include "lie_toolbox/incremental_jacobian.hpp"
+#include "lie_toolbox/polynomial_interpolation.hpp"
 #include <sensor_msgs/msg/joint_state.hpp>
 #include "std_msgs/msg/float64_multi_array.hpp"
 #include <geometry_msgs/msg/twist.hpp>
@@ -172,6 +172,11 @@ public:
             bais_m.setZero(6, 6);
             bais_matrix.push_back(bais_m);
         }
+
+        trajectory_ = liegroup::FifthOrderPolynomialTrajectory(
+            0.0, -0.6, 0.0, 0.0, // 초기 시간, 위치, 속도, 가속도
+            1.0, -0.3, 0.0, 0.0  // 최종 시간, 위치, 속도, 가속도
+        );
     }
 
 private:
@@ -237,18 +242,18 @@ private:
 
         // ComputeCorioliMatrix();
         // ComputeGravityMatrix();
-        // 목표 위치로의 편차 계산 (현재는 단순히 원하는 위치로 설정)
-        // 시간에 따른 사인파 생성
-        double elapsed_time = (this->now() - start_time_).seconds();
-        double amplitude = 0.1; // 사인파의 진폭 (미터 단위)
-        double frequency = 0.5; // 사인파의 주파수 (Hz)
-        double omega = 2 * M_PI * frequency;
-        double base_z = -0.5; // 기본 z 위치
-        double z = amplitude * sin(omega * elapsed_time) + base_z;
+        // 궤적 생성: 위치, 속도, 가속도 계산
 
-        // 원하는 위치와 회전을 설정 (z축만 사인파로 변경)
+        // 현재 시간 업데이트
+        double current_time = (this->now() - start_time_).seconds();
+
+        double z_position = trajectory_.GetPosition(current_time);
+        // double z_velocity = trajectory_.GetVelocity(current_time);
+        // double z_acceleration = trajectory_.GetAcceleration(current_time);
+
+        // 목표 위치 벡터 설정
         Eigen::VectorXd p_des(6);
-        p_des << 0.0, 0.0, z, liegroup::DegToRad(5.0), liegroup::DegToRad(10.0), liegroup::DegToRad(20.0);
+        p_des << 0.0, 0.0, z_position, liegroup::DegToRad(0.0), liegroup::DegToRad(0.0), liegroup::DegToRad(0.0);
 
         // int iteration = 0;
 
@@ -259,32 +264,38 @@ private:
         {
             return;
         }
-        auto start_time_calc = std::chrono::high_resolution_clock::now();
+        // auto start_time_calc = std::chrono::steady_clock::now();
 
         // Eigen::MatrixXd J = ComputeJacobian([this](const Eigen::VectorXd &theta)
         //                                     { return ForwardKinematics(theta); }, curr_theta);
 
         Eigen::MatrixXd JB = CalcBodyJacobian();
+        // std::cout << "1---------------" << std::endl;
+        // std::cout << std::fixed << std::setprecision(3) << JB << std::endl;
         Eigen::MatrixXd JB_reduced = JB.block(0, 0, JB.rows(), JB.cols() - 1);
 
-        //body jacobian
-        // std::cout << "1---------------" << std::endl;
+        // for (int i = 1; i <=body_jacobian->numjoint_; i++)
+        // {
+        //     std::cout<<i << "---------------" << std::endl;
+        //     std::cout << std::fixed << std::setprecision(3) << body_jacobian->bodies[i].current_body_velocity << std::endl;
+        // }
         
-        // std::cout << std::fixed << std::setprecision(3) << JB_reduced * curr_theta_dot << std::endl;
+        // body jacobian
+        //  std::cout << "1---------------" << std::endl;
+        //  std::cout << std::fixed << std::setprecision(3) << JB_reduced * curr_theta_dot << std::endl;
 
-        //analytic jacobian
-        // std::cout << "2---------------" << std::endl;
-        // std::cout << std::fixed << std::setprecision(3) << J * curr_theta_dot << std::endl;
-
+        // analytic jacobian
+        //  std::cout << "2---------------" << std::endl;
+        //  std::cout << std::fixed << std::setprecision(3) << J * curr_theta_dot << std::endl;
 
         SolveOptimization(JB_reduced, delta_p, des_theta_dot, curr_theta, theta_min, theta_max);
         // std::cout << des_theta_dot << std::endl;
-        auto end_time_calc = std::chrono::high_resolution_clock::now();
-        auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time_calc - start_time_calc).count(); // 나노초 단위
-        double duration_ms = duration_ns / 1e6;                                                                           // 나노초를 밀리초로 변환
+        // auto end_time_calc = std::chrono::steady_clock::now();
+        // auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time_calc - start_time_calc).count();
+        // double duration_ms = static_cast<double>(duration_ns) / 1e6; // 나노초를 밀리초로 변환
 
-        // 걸린 시간 출력
-        RCLCPP_INFO(this->get_logger(), "While 문이 반복을 완료하는데 걸린 시간: %.3f ms", duration_ms);
+        // // 걸린 시간 출력
+        // std::cout << "While 문이 반복을 완료하는데 걸린 시간: " << duration_ms << " ms" << std::endl;
 
         des_theta = curr_theta + des_theta_dot;
 
@@ -297,6 +308,22 @@ private:
             joint_state_msg.position.push_back(des_theta[joint_name_to_number[joint_name]]);
         }
         joint_publisher_->publish(joint_state_msg);
+        // 궤적이 끝에 도달했는지 확인하고 반전
+        if (current_time >= trajectory_.final_time_)
+        {
+            reverse_ = !reverse_;
+            // double initial_time = reverse_ ? 5.0 : 0.0;
+            // double final_time = reverse_ ? 0.0 : 5.0;
+            double initial_pos = reverse_ ? -0.3 : -0.6;
+            double final_pos = reverse_ ? -0.6 : -0.3;
+            double initial_time = 0.0;
+            double final_time = 1.0;
+
+            trajectory_.ChangeTrajectory(
+                initial_time, initial_pos, 0.0, 0.0,
+                final_time, final_pos, 0.0, 0.0);
+            start_time_ = this->now(); // 시작 시간 초기화
+        }
     }
 
     void SolveOptimization(const Eigen::MatrixXd &J, const Eigen::VectorXd &p_dot, Eigen::VectorXd &theta_dot,
@@ -642,8 +669,8 @@ private:
         {
             body_jacobian->bodies[i].select_joint_number_matrix(i - 1, 0) = 1;
         }
-        body_jacobian->PropagateKinematics();
 
+        body_jacobian->PropagateKinematics();
         endpoint_pos = model_frame_matrix[0] * model_frame_matrix[1] * model_frame_matrix[2] * model_frame_matrix[3] * model_frame_matrix[5] * model_frame_matrix[6];
         endpoint_vel = body_jacobian->bodies[body_jacobian->numjoint_].current_body_velocity;
         endpoint_acc = body_jacobian->bodies[body_jacobian->numjoint_].current_body_acceleration;
@@ -961,6 +988,7 @@ private:
     }
 
     liegroup::IncrementalJacobian *body_jacobian;
+    liegroup::FifthOrderPolynomialTrajectory trajectory_;
 
     rclcpp::Subscription<JointStates>::SharedPtr joint_subscriber_;
     rclcpp::Publisher<JointStates>::SharedPtr joint_publisher_;
@@ -985,6 +1013,7 @@ private:
     Eigen::Matrix4d inertia_offset_1, inertia_offset_2, inertia_offset_3, inertia_offset_4, inertia_offset_5, inertia_offset_6, inertia_offset_7, inertia_offset_8;
     std::vector<double> body_masses = {0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.5};
     rclcpp::Time start_time_;
+    bool reverse_ = false;
 };
 
 int main(int argc, char *argv[])

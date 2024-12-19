@@ -16,7 +16,7 @@ class LEG : public rclcpp::Node
 {
 public:
     std::vector<std::string> joint_names = {
-        "l_hip_p", "l_hip_r", "l_hip_y", "l_knee_p", "l_ankle_p", "l_ankle_r"};
+        "l_hip_y", "l_hip_r", "l_hip_p", "l_knee_p", "l_ankle_r", "l_ankle_p"};
     // 각 관절 이름에 대한 인덱스를 매핑하는 맵
     std::unordered_map<std::string, int> joint_name_to_number;
 
@@ -253,8 +253,8 @@ private:
         Eigen::Matrix4d joint_T_6;
 
         //  "l_hip_p", "l_hip_r", "l_hip_y", "l_knee_p", "l_ankle_p", "l_ankle_r"
-        joint_T_1 << cos(theta(2)), -sin(theta(2)), 0, 0,
-            sin(theta(2)), cos(theta(2)), 0, 0,
+        joint_T_1 << cos(theta(0)), -sin(theta(0)), 0, 0,
+            sin(theta(0)), cos(theta(0)), 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1; // l_hip_y
 
@@ -262,8 +262,8 @@ private:
             sin(theta(1)), cos(theta(1)), 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1; // l_hip_r
-        joint_T_3 << cos(theta(0)), -sin(theta(0)), 0, 0,
-            sin(theta(0)), cos(theta(0)), 0, 0,
+        joint_T_3 << cos(theta(2)), -sin(theta(2)), 0, 0,
+            sin(theta(2)), cos(theta(2)), 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1; // l_hip_p
         joint_T_4 << cos(theta(3)), -sin(theta(3)), 0, 0,
@@ -271,13 +271,13 @@ private:
             0, 0, 1, 0,
             0, 0, 0, 1; // l_knee_p
 
-        joint_T_5 << cos(theta(5)), -sin(theta(5)), 0, 0,
-            sin(theta(5)), cos(theta(5)), 0, 0,
+        joint_T_5 << cos(theta(4)), -sin(theta(4)), 0, 0,
+            sin(theta(4)), cos(theta(4)), 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1; // l_ankle_r
 
-        joint_T_6 << cos(theta(4)), -sin(theta(4)), 0, 0,
-            sin(theta(4)), cos(theta(4)), 0, 0,
+        joint_T_6 << cos(theta(5)), -sin(theta(5)), 0, 0,
+            sin(theta(5)), cos(theta(5)), 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1; // l_ankle_p
 
