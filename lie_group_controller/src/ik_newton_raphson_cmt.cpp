@@ -294,8 +294,8 @@ private:
         des_theta_ddot = J.inverse() * (task_des_acc - J_dot * des_theta_dot);
 
         Eigen::VectorXd Kp(6), Kv(6);
-        Kp << 1000, 1000, 5000, 1000, 100000, 100000;
-        Kv << 100, 100, 100, 300, 500, 500;
+        Kp << 1000, 3000, 5000, 1000, 200000, 200000;
+        Kv << 100, 100, 100, 300, 500, 1000;
 
         Eigen::VectorXd e = des_theta - curr_theta;
         Eigen::VectorXd dot_e = des_theta_dot - curr_theta_dot;
