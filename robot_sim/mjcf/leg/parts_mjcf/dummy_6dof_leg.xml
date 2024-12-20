@@ -24,7 +24,7 @@
                                         <body name="left_leg3" pos="0 0 -0.034" euler="0 0 0">
                                             <geom type="box" size="0.02 0.02 0.034" mass="0.0"/>
                                             <body name="foot" pos="0 0 -0.034" euler="0 0 0">
-                                                <geom type="box" size="0.1 0.1 0.034" contype="0" conaffinity="0" mass="0.5"/>
+                                                <geom type="box" size="0.2 0.2 0.034" mass="0.5"/>
                                             </body>
                                         </body>
                                     </body>

@@ -1,30 +1,30 @@
 <mujoco>
-    <body name="left_hip_y" pos="0 0 0" euler="5 0 0">
-        <joint pos="0 0 0" name="l_hip_y" type="hinge" axis="0 0 1" limited="true" range="-180 180" damping="0.1" />
+    <body name="left_hip_y" pos="0 0 -0.1" euler="5 0 0">
+        <joint pos="0 0 0" name="l_hip_y" type="hinge" axis="0 0 1" limited="true" range="-180 180" damping="10" />
         <geom type="sphere" size="0.05 0.05 0.1" mass="0.2"/>
         <body name="left_hip_r" pos="0 0 0" euler="0 0 0">
-            <joint pos="0 0 0" name="l_hip_r" type="hinge" axis="1 0 0" limited="true" range="-180 180" damping="0.1" />
+            <joint pos="0 0 0" name="l_hip_r" type="hinge" axis="1 0 0" limited="true" range="-180 180" damping="10" />
             <geom type="sphere" size="0.05 0.05 0.1" mass="0.2"/>
             <body name="left_hip_p" pos="0 0 -0.055" euler="0 0 0">
-                <joint pos="0 0 0" name="l_hip_p" type="hinge" axis="0 1 0" limited="true" range="-180 180" damping="0.1" />
+                <joint pos="0 0 0" name="l_hip_p" type="hinge" axis="0 1 0" limited="true" range="-180 180" damping="10" />
                 <geom type="sphere" size="0.05 0.05 0.1" mass="0.2"/>
                 <body name="left_leg1" pos="0 0 -0.1775" euler="0 0 0">
                     <geom type="box" size="0.02 0.02 0.1775" mass="0.0"/>
                     <body name="left_knee_p" pos="0 0 -0.1775" euler="0 0 0">
                         <geom type="sphere" size="0.05" mass="0.2"/>
-                        <joint pos="0 0 0" name="l_knee_p" type="hinge" axis="0 1 0" limited="true" range="-180 180" damping="0.1" />
+                        <joint pos="0 0 0" name="l_knee_p" type="hinge" axis="0 1 0" limited="true" range="-180 180" damping="10" />
                         <body name="left_leg2" pos="0 0 -0.1775" euler="0 0 0">
                             <geom type="box" size="0.02 0.02 0.1775" mass="0.0"/>
                                 <body name="left_ankle_r" pos="0 0 -0.1775" euler="0 0 0">
-                                    <joint pos="0 0 0" name="l_ankle_r" type="hinge" axis="1 0 0" limited="true" range="-180 180" damping="0.1" />
+                                    <joint pos="0 0 0" name="l_ankle_r" type="hinge" axis="1 0 0" limited="true" range="-180 180" damping="10" />
                                     <geom type="sphere" size="0.05 0.05 0.1" mass="0.2"/>
                                     <body name="left_ankle_p" pos="0 0 -0.015" euler="0 0 0">
-                                        <joint pos="0 0 0" name="l_ankle_p" type="hinge" axis="0 1 0" limited="true" range="-180 180" damping="0.1" />
+                                        <joint pos="0 0 0" name="l_ankle_p" type="hinge" axis="0 1 0" limited="true" range="-180 180" damping="10" />
                                         <geom type="sphere" size="0.05 0.05 0.1" mass="0.2"/>
                                         <body name="left_leg3" pos="0 0 -0.034" euler="0 0 0">
                                             <geom type="box" size="0.02 0.02 0.034" mass="0.0"/>
                                             <body name="foot" pos="0 0 -0.034" euler="0 0 0">
-                                                <geom type="box" size="0.1 0.1 0.034" contype="0" conaffinity="0" mass="0.5"/>
+                                                <geom type="box" size="0.2 0.2 0.034" mass="0.5"/>
                                             </body>
                                         </body>
                                     </body>
