@@ -298,11 +298,16 @@ private:
         Eigen::VectorXd Kp(6), Kv(6);
 
         Eigen::VectorXd Kp_a(6), Kv_a(6);
-        Kp << 1000, 3000, 5000, 1000, 200000, 200000;
-        Kv << 100, 100, 100, 300, 500, 1000;
+        Kp << 0.1, 0.1, 0.1, 0.1, 0.1, 0.1;
+        Kv << 0.01, 0.01, 0.01, 0.01, 0.01, 0.01;
+        // Kp << 1000, 3000, 5000, 1000, 200000, 200000;
+        // Kv << 100, 100, 100, 300, 500, 1000;
 
-        Kp_a << 100, 100, 100, 100, 100, 100;
-        Kv_a << 100, 100, 100, 100, 100, 100;
+        Kp_a << 0.001, 0.001, 0.001, 0.001, 0.001, 0.001;
+        Kv_a << 0.01, 0.01, 0.01, 0.01, 0.01, 0.01;
+
+        // Kp_a << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
+        // Kv_a << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
 
         // Eigen::VectorXd e = des_theta - curr_theta;
         // Eigen::VectorXd dot_e = des_theta_dot - curr_theta_dot;
@@ -322,6 +327,7 @@ private:
         integral_e += e;
         Eigen::VectorXd dot_e = des_theta_dot - delta_theta_dot;
         Eigen::VectorXd dot_e_n_r = delta_theta_dot - curr_theta_dot;
+      
 
         Eigen::VectorXd ref_theta_ddot(6);
        
@@ -329,7 +335,7 @@ private:
 
         // Eigen::VectorXd k_c(6);
         // k_c << 0.1, 0.1, 0.1, 0.1, 0.1, 0.1;
-        double gamma = 0.8;
+        double gamma = 0.18;
         Eigen::MatrixXd scaled_identity = 0.0 * k_c + (1 / (gamma * gamma)) * Eigen::MatrixXd::Identity(6, 6);
 
         // Eigen::MatrixXd scaled_identity = k_c.asDiagonal() + (1 / (gamma * gamma)) * Eigen::MatrixXd::Identity(6, 6);
@@ -337,6 +343,7 @@ private:
         torque_a = -(scaled_identity * scaled_term);
 
         ref_theta_ddot = des_theta_ddot + Kv.asDiagonal() * dot_e + Kp.asDiagonal() * e;
+
         torque = mass_matrix * ref_theta_ddot + corioli_matrix * curr_theta_dot + gravity_matrix;
         torque -= torque_a;
 
