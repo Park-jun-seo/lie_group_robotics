@@ -236,7 +236,6 @@ private:
         theta_min << -1.57, -3.14, -3.14, 0, -3.14, -3.14;
         theta_max << 1.57, 3.14, 3.14, 3.14, 3.14, 3.14;
 
-
         double current_time = (this->now() - start_time_).seconds();
 
         double z_position = trajectory_.GetPosition(current_time);
@@ -291,60 +290,45 @@ private:
         Eigen::VectorXd des_theta_dot(6);
         des_theta_dot = J.inverse() * task_des_vel;
 
-        Eigen::VectorXd des_theta_ddot(6);
-
-        des_theta_ddot = J.inverse() * (task_des_acc - J_dot * des_theta_dot);
-
         Eigen::VectorXd Kp(6), Kv(6);
+        Kp << 1000, 1000, 1000, 1000, 1000, 1000;
+        Kv << 10, 10, 10, 100, 100, 100;
 
         Eigen::VectorXd Kp_a(6), Kv_a(6);
-        Kp << 1000, 1000, 1000, 1000, 1000, 1000;
-        Kv << 10, 10, 10, 10, 10, 10;
-        // Kp << 1000, 3000, 5000, 1000, 200000, 200000;
-        // Kv << 100, 100, 100, 300, 500, 1000;
-
         Kp_a << 0.001, 0.001, 0.001, 0.001, 0.001, 0.001;
         Kv_a << 1, 1, 1, 1, 1, 1;
 
-        // Kp_a << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
-        // Kv_a << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
-
         // Eigen::VectorXd e = des_theta - curr_theta;
         // Eigen::VectorXd dot_e = des_theta_dot - curr_theta_dot;
-
-        //         Eigen::VectorXd Kp(6), Kv(6), ref_Kp(6);
-        // Kp << 0.05, 0.05, 0.05, 0.05, 0.05, 0.05;
-        // ref_Kp << 0.01, 0.01, 0.01, 0.01, 0.01, 0.01;
-
-        // Kv << 0.01, 0.01, 0.01, 0.01, 0.01, 0.01;
-
         static Eigen::VectorXd integral_e(6);
         static Eigen::VectorXd integral_e_n_r(6);
 
-        Eigen::VectorXd e = des_theta - des_theta;
+        Eigen::VectorXd e = ForwardKinematics(des_theta) - ForwardKinematics(des_theta);
         Eigen::VectorXd e_n_r = des_theta - curr_theta;
         integral_e_n_r += e_n_r;
         integral_e += e;
-        Eigen::VectorXd dot_e = des_theta_dot - delta_theta_dot;
+
+        Eigen::VectorXd dot_e = task_des_vel - J * delta_theta_dot;
         Eigen::VectorXd dot_e_n_r = delta_theta_dot - curr_theta_dot;
-      
+
+        Eigen::VectorXd des_theta_ddot(6);
+        task_des_acc += Kp.cwiseProduct(e) +
+                        Kv.cwiseProduct(dot_e);
+
+        des_theta_ddot = J.inverse() * (task_des_acc - J_dot * des_theta_dot);
 
         Eigen::VectorXd ref_theta_ddot(6);
-       
-        Eigen::MatrixXd k_c = Eigen::MatrixXd::Identity(6, 6);
+        ref_theta_ddot = des_theta_ddot;
+        torque = mass_matrix * ref_theta_ddot + corioli_matrix * curr_theta_dot + gravity_matrix;
 
-        // Eigen::VectorXd k_c(6);
-        // k_c << 0.1, 0.1, 0.1, 0.1, 0.1, 0.1;
         double gamma = 0.18;
+        Eigen::MatrixXd k_c = Eigen::MatrixXd::Identity(6, 6);
         Eigen::MatrixXd scaled_identity = 0.0 * k_c + (1 / (gamma * gamma)) * Eigen::MatrixXd::Identity(6, 6);
 
         // Eigen::MatrixXd scaled_identity = k_c.asDiagonal() + (1 / (gamma * gamma)) * Eigen::MatrixXd::Identity(6, 6);
         Eigen::VectorXd scaled_term = dot_e_n_r + Kv_a.cwiseProduct(e_n_r) + Kp_a.cwiseProduct(integral_e_n_r);
         torque_a = -(scaled_identity * scaled_term);
 
-        ref_theta_ddot = des_theta_ddot + Kv.asDiagonal() * dot_e + Kp.asDiagonal() * e;
-
-        torque = mass_matrix * ref_theta_ddot + corioli_matrix * curr_theta_dot + gravity_matrix;
         torque -= torque_a;
 
         // torque = gravity_matrix;

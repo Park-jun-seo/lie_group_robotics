@@ -53,6 +53,8 @@ add_library(lie_group_controller_lib
   src/ik_newton_raphson_body_jacobian_cmt.cpp
   src/ik_newton_raphson_passivity_cmt.cpp
   src/ik_newton_raphson_cmt_nric.cpp
+  src/ik_newton_raphson_rac.cpp
+  src/ik_newton_raphson_rac_nric.cpp
 )
 ament_target_dependencies(lie_group_controller_lib ${dependencies})
 target_link_libraries(lie_group_controller_lib
@@ -108,6 +110,14 @@ target_link_libraries(ik_newton_raphson_passivity_cmt lie_group_controller_lib)
 add_executable(ik_newton_raphson_cmt_nric src/ik_newton_raphson_cmt_nric.cpp)
 ament_target_dependencies(ik_newton_raphson_cmt_nric ${dependencies})
 target_link_libraries(ik_newton_raphson_cmt_nric lie_group_controller_lib)
+
+add_executable(ik_newton_raphson_rac src/ik_newton_raphson_rac.cpp)
+ament_target_dependencies(ik_newton_raphson_rac ${dependencies})
+target_link_libraries(ik_newton_raphson_rac lie_group_controller_lib)
+
+add_executable(ik_newton_raphson_rac_nric src/ik_newton_raphson_rac_nric.cpp)
+ament_target_dependencies(ik_newton_raphson_rac_nric ${dependencies})
+target_link_libraries(ik_newton_raphson_rac_nric lie_group_controller_lib)
 ################################################################################
 # Install
 ################################################################################
@@ -133,6 +143,8 @@ install(TARGETS
   ik_newton_raphson_body_jacobian_cmt
   ik_newton_raphson_passivity_cmt
   ik_newton_raphson_cmt_nric
+  ik_newton_raphson_rac
+  ik_newton_raphson_rac_nric
   DESTINATION lib/${PROJECT_NAME}
 )
 
