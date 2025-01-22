@@ -869,7 +869,7 @@ private:
         c_55.setZero();
         current_transform = Eigen::Matrix4d::Identity();
         c_55 += bais_matrix[4];
-        for (int i = 4; i <= 5; ++i)
+        for (int i = 5; i <= 5; ++i)
         {
             current_transform *= model_frame_matrix[i]; // Accumulate the transforms
             c_55 += ComputeIntertiaOffset(current_transform, bais_matrix[i] - body_inertia_matrix[i - 1] * liegroup::LieAlgebra::AdOperator(body_twist[i - 1].tail(3)));
